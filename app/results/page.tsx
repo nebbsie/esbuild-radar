@@ -22,6 +22,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  getChunksCreatedByFile,
   getImportSources,
   getInclusionPath,
   inferEntryForOutput,
@@ -1801,6 +1802,91 @@ export default function ResultsPage() {
                                         {formatBytes(source.chunkSize)})
                                       </div>
                                     )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
+                {/* Modules Created Section */}
+                {(() => {
+                  const createdChunks = selectedModule
+                    ? getChunksCreatedByFile(metafile, selectedModule, chunks)
+                    : [];
+
+                  if (createdChunks.length > 0) {
+                    return (
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                          <span>Modules Created ({createdChunks.length})</span>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <HelpCircle
+                                  size={12}
+                                  className="text-muted-foreground hover:text-foreground cursor-help"
+                                />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>
+                                  Lazy-loaded chunks created by dynamic imports
+                                  in this file
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </h4>
+                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                          {createdChunks.map((created, idx) => {
+                            const { icon: IconComponent, color } =
+                              getChunkTypeIcon("lazy");
+
+                            return (
+                              <div
+                                key={idx}
+                                className="flex items-start gap-2 p-2 rounded-md border bg-card hover:bg-accent/50 transition-colors"
+                              >
+                                <div className="flex-shrink-0 mt-0.5">
+                                  <div
+                                    className={`w-3 h-3 rounded-full ${color} flex items-center justify-center`}
+                                  >
+                                    <IconComponent
+                                      size={10}
+                                      className="text-white"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span
+                                      className="text-xs font-medium truncate"
+                                      title={created.chunk.outputFile}
+                                    >
+                                      {created.chunk.outputFile}
+                                    </span>
+                                    <span className="text-xs text-purple-600 font-medium">
+                                      lazy
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1 mb-1">
+                                    <span className="text-xs text-muted-foreground">
+                                      from
+                                    </span>
+                                    <code
+                                      className="text-xs bg-muted px-1 py-0.5 rounded font-mono truncate flex-1"
+                                      title={created.dynamicImportPath}
+                                    >
+                                      {created.dynamicImportPath}
+                                    </code>
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {formatBytes(created.chunk.bytes)}
+                                  </div>
                                 </div>
                               </div>
                             );

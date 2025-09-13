@@ -504,3 +504,59 @@ export function getImportSources(
     return 0; // same type, maintain original order
   });
 }
+
+/**
+ * Returns chunks that were created by dynamic imports from the given file.
+ * This helps understand what lazy modules a file generates.
+ */
+export interface CreatedChunk {
+  chunk: InitialChunkSummary;
+  dynamicImportPath: string;
+}
+
+export function getChunksCreatedByFile(
+  meta: Metafile,
+  filePath: string,
+  chunks: InitialChunkSummary[]
+): CreatedChunk[] {
+  const createdChunks: CreatedChunk[] = [];
+
+  // Get the file's imports from the metafile
+  const fileInputs = meta.inputs[filePath];
+  if (!fileInputs?.imports) {
+    return createdChunks;
+  }
+
+  // Find dynamic imports from this file
+  const dynamicImports = fileInputs.imports.filter(
+    (imp) => imp.kind === "dynamic-import"
+  );
+
+  for (const dynamicImport of dynamicImports) {
+    // Clean up the import path
+    const importPath = dynamicImport.path.replace(/^["']|["']$/g, "");
+
+    // Find chunks that this dynamic import likely created
+    const matchingChunks = chunks.filter((chunk) => {
+      // Check if chunk entry point matches the import
+      if (chunk.entryPoint.includes(importPath.replace("./", ""))) {
+        return true;
+      }
+
+      // Check if chunk contains files from this import path
+      return chunk.includedInputs.some((input) =>
+        input.includes(importPath.replace("./", ""))
+      );
+    });
+
+    // Add found chunks to results
+    for (const chunk of matchingChunks) {
+      createdChunks.push({
+        chunk,
+        dynamicImportPath: importPath,
+      });
+    }
+  }
+
+  return createdChunks;
+}
