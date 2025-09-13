@@ -85,9 +85,7 @@ export default function ResultsPage() {
   const [selectedModule, setSelectedModule] = React.useState<string | null>(
     null
   );
-  const [inclusion, setInclusion] = React.useState<InclusionPathResult | null>(
-    null
-  );
+  const [, setInclusion] = React.useState<InclusionPathResult | null>(null);
   const [metafileName, setMetafileName] = React.useState<string>("");
 
   // Update page title when metafile name changes
@@ -266,26 +264,6 @@ export default function ResultsPage() {
       isEntry: Boolean(out.entryPoint),
       includedInputs: Object.keys(out.inputs || {}),
     };
-  }, [initialSummary, metafile]);
-
-  // Get only the chunks that are loaded initially
-  const initialBundleChunks = React.useMemo(() => {
-    if (!initialSummary || !metafile) return [];
-    return initialSummary.initial.outputs
-      .map((outputFile) => {
-        const out = metafile.outputs[outputFile];
-        if (!out) return null;
-        return {
-          outputFile,
-          bytes: out.bytes || 0,
-          entryPoint:
-            out.entryPoint || inferEntryForOutput(metafile, outputFile) || "",
-          isEntry: Boolean(out.entryPoint),
-          includedInputs: Object.keys(out.inputs || {}),
-        };
-      })
-      .filter((chunk): chunk is InitialChunkSummary => Boolean(chunk))
-      .sort((a, b) => b.bytes - a.bytes); // Sort by size (largest first)
   }, [initialSummary, metafile]);
 
   // Separate initial and lazy chunks for the new UI sections
@@ -1734,8 +1712,8 @@ export default function ResultsPage() {
                             const canOpen =
                               Boolean(chunkContainingFile) ||
                               fileExistsInMetafile;
-                            const isSourceOnly =
-                              fileExistsInMetafile && !chunkContainingFile;
+                            // const isSourceOnly =
+                            //   fileExistsInMetafile && !chunkContainingFile;
 
                             const { icon: IconComponent, color } =
                               getChunkTypeIcon(source.chunkType);

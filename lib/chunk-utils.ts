@@ -77,7 +77,7 @@ export function getChunkLoadType(
  * @returns Object containing the icon component and CSS color class
  */
 export function getChunkTypeIcon(loadType: "initial" | "lazy"): {
-  icon: any; // Using any for Lucide icon components
+  icon: string;
   color: string;
 } {
   switch (loadType) {

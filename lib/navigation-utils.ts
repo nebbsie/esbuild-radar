@@ -1,5 +1,9 @@
 import { inferEntryForOutput } from "@/lib/analyser";
-import type { InitialChunkSummary, Metafile } from "@/lib/metafile";
+import type {
+  InclusionPathResult,
+  InitialChunkSummary,
+  Metafile,
+} from "@/lib/metafile";
 import { findInclusionPath } from "@/lib/metafile";
 
 /**
@@ -36,7 +40,7 @@ export function calculateInclusionPath(
   metafile: Metafile,
   modulePath: string,
   entryPoint: string
-): { found: boolean; path: any[] } {
+): InclusionPathResult {
   if (!metafile || !entryPoint) {
     return { found: false, path: [] };
   }
@@ -57,7 +61,7 @@ export function selectModule(
 ): {
   selectedModule: string;
   selectedChunk: InitialChunkSummary | null;
-  inclusion: { found: boolean; path: any[] } | null;
+  inclusion: InclusionPathResult | null;
 } {
   // Find the chunk that contains this module
   const chunkContainingModule = chunks.find((chunk) =>
