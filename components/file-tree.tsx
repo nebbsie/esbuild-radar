@@ -107,6 +107,7 @@ const FileTreeItem = React.memo<{
     );
   }
 );
+FileTreeItem.displayName = "FileTreeItem";
 
 export function FileTree({
   tree,

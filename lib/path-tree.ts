@@ -24,7 +24,7 @@ export function findOptimalRoot(
     f.path.split("/").filter(Boolean)
   );
 
-  let commonPrefix: string[] = [];
+  const commonPrefix: string[] = [];
   if (allParts.length > 0) {
     const firstPath = allParts[0];
     for (let i = 0; i < firstPath.length; i++) {
@@ -37,7 +37,7 @@ export function findOptimalRoot(
     }
   }
 
-  let optimalPrefix = commonPrefix;
+  let optimalPrefix = [...commonPrefix];
   for (let i = 0; i < commonPrefix.length; i++) {
     const part = commonPrefix[i];
     if (skipPrefixes.includes(part.toLowerCase())) {

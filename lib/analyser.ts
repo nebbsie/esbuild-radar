@@ -208,7 +208,7 @@ export function pickInitialOutput(
 }
 
 export interface ClassifiedChunks {
-  initial: EagerChunkSummary;
+  initial: EagerChunkSummary | undefined;
   eager: EagerChunkSummary[];
   lazy: EagerChunkSummary[];
 }
@@ -229,7 +229,8 @@ export function classifyChunksFromInitial(
 
   // Create the initial chunk summary
   const initialOut = meta.outputs[initialOutput];
-  if (!initialOut) return { initial: null as any, eager, lazy };
+  if (!initialOut)
+    return { initial: undefined as EagerChunkSummary | undefined, eager, lazy };
 
   const initialChunk: EagerChunkSummary = {
     outputFile: initialOutput,

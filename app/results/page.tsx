@@ -190,10 +190,7 @@ export default function ResultsPage() {
   }, [showFilterMenu]);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  const initialPickedOutput = React.useMemo(
-    () => (metafile ? pickInitialOutput(metafile) : undefined),
-    [metafile]
-  );
+  // Note: initial output is determined on load; no need to memoize separately
   const initialChunk = React.useMemo(() => {
     return classifiedChunks?.initial || null;
   }, [classifiedChunks]);
@@ -228,7 +225,7 @@ export default function ResultsPage() {
             classified.initial,
             ...classified.eager,
             ...classified.lazy,
-          ];
+          ].filter((chunk): chunk is EagerChunkSummary => Boolean(chunk));
 
           // Select the first chunk from the classified list, or the initial chunk if empty
           let initialSelected = allChunks[0] || null;
@@ -385,7 +382,7 @@ export default function ResultsPage() {
 
         return matchesSearch && matchesType;
       }),
-    [chunks, chunkSearch, chunkTypeFilters]
+    [chunks, chunkSearch, chunkTypeFilters, getChunkLoadType]
   );
 
   // Helper to get icon and tooltip for chunk type
@@ -415,42 +412,12 @@ export default function ResultsPage() {
     []
   );
 
-  // Helper to convert import kind to our icon system
-  const getImportKindIcon = React.useCallback((kind: string) => {
-    switch (kind) {
-      case "dynamic-import":
-        return {
-          icon: Hourglass,
-          tooltip: "Lazy loaded - imported dynamically with import()",
-          color: "bg-purple-500",
-        };
-      case "import-statement":
-        return {
-          icon: Zap,
-          tooltip: "Eager loaded - imported with static import statement",
-          color: "bg-red-500",
-        };
-      case "entry-point":
-        return {
-          icon: Star,
-          tooltip: "Entry point - the main file that starts your application",
-          color: "bg-yellow-500",
-        };
-      default:
-        return {
-          icon: Zap,
-          tooltip: `Imported via ${kind}`,
-          color: "bg-gray-500",
-        };
-    }
-  }, []);
-
   // Components for better organization and performance
   const ChunkItem = React.memo<{
     chunk: EagerChunkSummary;
     loadType: "initial" | "eager" | "lazy";
     getChunkTypeIcon: (loadType: "initial" | "eager" | "lazy") => {
-      icon: React.ComponentType<any>;
+      icon: React.ComponentType<{ size?: number }>;
       tooltip: string;
       color: string;
     };
@@ -501,6 +468,7 @@ export default function ResultsPage() {
       </button>
     );
   });
+  ChunkItem.displayName = "ChunkItem";
 
   const ImportItem = React.memo<{
     dep: ReverseDependency;
@@ -531,38 +499,21 @@ export default function ResultsPage() {
       </div>
     );
   });
+  ImportItem.displayName = "ImportItem";
 
   const InclusionPathItem = React.memo<{
     step: InclusionPathStep;
-    getImportKindIcon: (kind: string) => {
-      icon: React.ComponentType<any>;
-      tooltip: string;
-      color: string;
-    };
-  }>(({ step, getImportKindIcon }) => {
-    const {
-      icon: IconComponent,
-      tooltip,
-      color,
-    } = getImportKindIcon(step.kind);
-
+  }>(({ step }) => {
     return (
       <li className="break-all">
         <span>↳ {step.to}</span>
       </li>
     );
   });
+  InclusionPathItem.displayName = "InclusionPathItem";
 
   // Find all highlighted elements in the chunk contents
-  const findHighlightedElements = React.useCallback(() => {
-    if (!chunkSearch) return [];
-    return Array.from(
-      document.querySelectorAll(".bg-yellow-200, .bg-yellow-800")
-    ).filter((el) => {
-      // Make sure it's in the chunk contents area
-      return el.closest("[data-chunk-contents]");
-    });
-  }, [chunkSearch]);
+  // removed unused findHighlightedElements helper
 
   // Navigate to next/previous search result across all chunks
   const navigateSearchResult = React.useCallback(
@@ -696,7 +647,13 @@ export default function ResultsPage() {
         }
       }
     },
-    [chunkSearch, filteredChunks, selectedChunk, searchResultIndex]
+    [
+      chunkSearch,
+      filteredChunks,
+      selectedChunk,
+      searchResultIndex,
+      navigateToModule,
+    ]
   );
 
   // Handle Enter key in search input
@@ -790,11 +747,13 @@ export default function ResultsPage() {
         classified.initial,
         ...classified.eager,
         ...classified.lazy,
-      ];
+      ].filter((chunk): chunk is EagerChunkSummary => Boolean(chunk));
 
       // Select the first chunk from the classified list, or the initial chunk if empty
-      let initialSelected = allChunks[0] || null;
-      if (!initialSelected && pickedInitial) {
+      let initialSelected: EagerChunkSummary | null = null;
+      if (allChunks.length > 0 && allChunks[0]) {
+        initialSelected = allChunks[0];
+      } else if (pickedInitial) {
         const out = meta.outputs[pickedInitial];
         initialSelected = {
           outputFile: pickedInitial,
@@ -808,14 +767,18 @@ export default function ResultsPage() {
 
       setMetafile(meta);
       setClassifiedChunks(classified);
-      setChunks(allChunks);
+      setChunks(
+        allChunks.filter((chunk): chunk is EagerChunkSummary => Boolean(chunk))
+      );
       setSelectedChunk(initialSelected);
 
       // Only select the entry point if it's actually included in this chunk
       const entryPointInChunk =
         initialSelected?.entryPoint &&
         initialSelected.includedInputs.includes(initialSelected.entryPoint);
-      setSelectedModule(entryPointInChunk ? initialSelected.entryPoint : null);
+      setSelectedModule(
+        entryPointInChunk && initialSelected ? initialSelected.entryPoint : null
+      );
       setInclusion(null);
       setChunkSearch("");
       setSearchResultIndex(-1);
@@ -994,7 +957,9 @@ export default function ResultsPage() {
                           {initialBundleChunks.length > 0
                             ? formatBytes(
                                 Math.max(
-                                  ...initialBundleChunks.map((c) => c.bytes)
+                                  ...initialBundleChunks.map(
+                                    (c) => c?.bytes || 0
+                                  )
                                 )
                               )
                             : "0 B"}
@@ -1018,7 +983,7 @@ export default function ResultsPage() {
                         <span>
                           {initialBundleChunks.reduce(
                             (total, chunk) =>
-                              total + chunk.includedInputs.length,
+                              total + (chunk?.includedInputs?.length || 0),
                             0
                           )}
                         </span>
@@ -1384,8 +1349,8 @@ export default function ResultsPage() {
               <CardContent className="flex flex-col gap-6 h-full overflow-hidden px-3 py-2">
                 {!selectedModule ? (
                   <p className="text-sm text-muted-foreground">
-                    Click on a file in the middle panel to see how it's included
-                    in your app.
+                    Click on a file in the middle panel to see how it&apos;s
+                    included in your app.
                   </p>
                 ) : (
                   <div className="space-y-2">
@@ -1467,13 +1432,6 @@ export default function ResultsPage() {
                   const reverseDeps = selectedModule
                     ? findReverseDependencies(metafile, selectedModule)
                     : [];
-                  const inclusion = selectedModule
-                    ? findInclusionPath(
-                        metafile,
-                        selectedChunk?.entryPoint || "",
-                        selectedModule
-                      )
-                    : null;
 
                   if (reverseDeps.length > 0) {
                     return (
@@ -1506,11 +1464,11 @@ export default function ResultsPage() {
                                 dep={dep}
                                 canOpen={canOpen}
                                 onClick={
-                                  canOpen
+                                  canOpen && chunkContainingFile
                                     ? () =>
                                         navigateToModule(
                                           dep.importer,
-                                          chunkContainingFile!
+                                          chunkContainingFile
                                         )
                                     : undefined
                                 }
@@ -1672,11 +1630,8 @@ export default function ResultsPage() {
                   ) {
                     // This is the entry point of a chunk (could be lazy or eager)
                     const chunkType = getChunkLoadType(selectedChunk!);
-                    const {
-                      icon: IconComponent,
-                      tooltip,
-                      color,
-                    } = getChunkTypeIcon(chunkType);
+                    const { icon: IconComponent, color } =
+                      getChunkTypeIcon(chunkType);
 
                     return (
                       <div className="space-y-2">
@@ -1742,11 +1697,7 @@ export default function ResultsPage() {
                           {selectedChunk?.entryPoint || "Unknown"}
                         </li>
                         {res.path.map((s, idx) => (
-                          <InclusionPathItem
-                            key={idx}
-                            step={s}
-                            getImportKindIcon={getImportKindIcon}
-                          />
+                          <InclusionPathItem key={idx} step={s} />
                         ))}
                       </ol>
                     </div>
