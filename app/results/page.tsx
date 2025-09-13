@@ -122,6 +122,31 @@ export default function ResultsPage() {
   // no-op: using setChunkTypeFilters directly with functional updates below
 
   // Navigation history functions
+  const findBestChunkForFile = React.useCallback(
+    (filePath: string): EagerChunkSummary | undefined => {
+      // First, try to find a chunk that directly contains this file
+      const directChunk = chunks.find((chunk) =>
+        chunk.includedInputs.includes(filePath)
+      );
+      if (directChunk) return directChunk;
+
+      // If not found directly, try to find a chunk that contains files imported by this file
+      // This helps with barrel files that might import many files
+      if (metafile?.inputs[filePath]?.imports) {
+        for (const imp of metafile.inputs[filePath].imports) {
+          const chunkWithImportedFile = chunks.find((chunk) =>
+            chunk.includedInputs.includes(imp.path)
+          );
+          if (chunkWithImportedFile) return chunkWithImportedFile;
+        }
+      }
+
+      // As a last resort, return the currently selected chunk if it exists
+      return selectedChunk || undefined;
+    },
+    [chunks, metafile, selectedChunk]
+  );
+
   const navigateToModule = React.useCallback(
     (modulePath: string, chunk?: EagerChunkSummary, skipHistory = false) => {
       if (!skipHistory && selectedModule && selectedModule !== modulePath) {
@@ -130,12 +155,26 @@ export default function ResultsPage() {
       }
 
       setSelectedModule(modulePath);
-      if (chunk) {
-        setSelectedChunk(chunk);
+
+      // If no chunk was provided, try to find the best chunk for this file
+      const targetChunk = chunk || findBestChunkForFile(modulePath);
+
+      if (targetChunk) {
+        setSelectedChunk(targetChunk);
         if (metafile) {
-          const res = findInclusionPath(metafile, chunk.entryPoint, modulePath);
-          setInclusion(res);
+          const rootEntry =
+            classifiedChunks?.initial?.entryPoint || targetChunk.entryPoint;
+          if (metafile && rootEntry) {
+            const res = findInclusionPath(metafile, rootEntry, modulePath);
+            setInclusion(res);
+          } else {
+            setInclusion(null);
+          }
         }
+      } else {
+        // If we still don't have a chunk, clear the selected chunk
+        // This will show all files from the metafile
+        setSelectedChunk(null);
       }
 
       // Scroll to the module after DOM updates
@@ -151,7 +190,7 @@ export default function ResultsPage() {
         }
       }, 100);
     },
-    [selectedModule, metafile]
+    [selectedModule, metafile, findBestChunkForFile, classifiedChunks]
   );
 
   const goBackToPreviousModule = React.useCallback(() => {
@@ -302,40 +341,15 @@ export default function ResultsPage() {
       setSelectedChunk(chunkContainingModule);
 
       // Only select the entry point if it's actually included in this chunk
-      const entryPointInChunk =
-        chunkContainingModule.entryPoint &&
-        chunkContainingModule.includedInputs.includes(
-          chunkContainingModule.entryPoint
-        );
-      setSelectedModule(
-        entryPointInChunk ? chunkContainingModule.entryPoint : null
-      );
-
-      // Scroll the entry point file into view if it was selected
-      if (entryPointInChunk) {
-        setTimeout(() => {
-          const selectedElement = document.querySelector(
-            '[data-selected-module="true"]'
-          );
-          if (selectedElement) {
-            selectedElement.scrollIntoView({
-              behavior: "instant",
-              block: "center",
-            });
-          }
-        }, 50);
+      const rootEntry =
+        classifiedChunks?.initial?.entryPoint ||
+        chunkContainingModule.entryPoint;
+      if (metafile && rootEntry) {
+        const res = findInclusionPath(metafile, rootEntry, mod);
+        setInclusion(res);
+      } else {
+        setInclusion(null);
       }
-    }
-
-    if (metafile && chunkContainingModule) {
-      const res = findInclusionPath(
-        metafile,
-        chunkContainingModule.entryPoint,
-        mod
-      );
-      setInclusion(res);
-    } else {
-      setInclusion(null);
     }
 
     // Scroll to the selected module after DOM updates
@@ -478,27 +492,92 @@ export default function ResultsPage() {
   const ImportItem = React.memo<{
     dep: ReverseDependency;
     canOpen: boolean;
+    isSourceOnly?: boolean;
+    isLazy?: boolean;
     onClick?: () => void;
-  }>(({ dep, canOpen, onClick }) => {
+  }>(({ dep, canOpen, isSourceOnly, isLazy, onClick }) => {
     return (
       <div className="w-full text-left text-xs break-all bg-muted/50 hover:bg-muted px-2 py-1 rounded transition-colors group">
         <div className="flex items-center gap-2">
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div
+                  className={`p-1 rounded flex-shrink-0 ${
+                    isLazy ? "bg-purple-500" : "bg-red-500"
+                  }`}
+                >
+                  <div className="w-2.5 h-2.5 text-white flex items-center justify-center">
+                    {isLazy ? <Clock size={10} /> : <Zap size={10} />}
+                  </div>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>
+                  {isLazy
+                    ? "Lazy import - loaded on-demand when needed"
+                    : "Eager import - loaded immediately with the module"}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <div className="flex-1 min-w-0">
             <div className="font-medium truncate" title={dep.importer}>
               {dep.importer}
             </div>
-            {dep.external && (
-              <span className="text-muted-foreground">(external)</span>
-            )}
+            <div className="flex items-center gap-2 text-muted-foreground">
+              {dep.external && <span className="text-xs">(external)</span>}
+              {isSourceOnly && <span className="text-xs">(source only)</span>}
+              {dep.original && dep.original !== dep.importer && (
+                <span className="text-xs font-mono bg-muted px-1 rounded">
+                  {dep.original}
+                </span>
+              )}
+              <span className="text-xs capitalize">
+                {dep.kind.replace("-", " ")}
+              </span>
+            </div>
           </div>
-          {canOpen && (
-            <button
-              onClick={onClick}
-              className="flex-shrink-0 p-1 rounded hover:bg-muted-foreground/20 transition-colors cursor-pointer"
-              title="Open this file"
-            >
-              <ArrowRight size={12} className="text-muted-foreground" />
-            </button>
+          {canOpen ? (
+            <TooltipProvider delayDuration={700}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={onClick}
+                    className="flex-shrink-0 p-1 rounded hover:bg-muted-foreground/20 transition-colors cursor-pointer"
+                  >
+                    {isSourceOnly ? (
+                      <FileText size={12} className="text-muted-foreground" />
+                    ) : (
+                      <ArrowRight size={12} className="text-muted-foreground" />
+                    )}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>
+                    {isSourceOnly
+                      ? "Navigate to source file (optimized out of bundle)"
+                      : "Navigate to this file in the bundle"}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : (
+            <TooltipProvider delayDuration={700}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex-shrink-0 p-1 rounded bg-muted-foreground/20">
+                    <ArrowRight
+                      size={12}
+                      className="text-muted-foreground/50"
+                    />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>File not found in bundle or metafile</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
         </div>
       </div>
@@ -511,7 +590,12 @@ export default function ResultsPage() {
   }>(({ step }) => {
     return (
       <li className="break-all">
-        <span>↳ {step.to}</span>
+        <div className="flex items-center gap-2">
+          <span>↳ {step.to}</span>
+          <span className="text-xs text-muted-foreground capitalize">
+            ({step.kind.replace("-", " ")})
+          </span>
+        </div>
       </li>
     );
   });
@@ -1238,19 +1322,18 @@ export default function ResultsPage() {
                 </div>
               </CardHeader>
               <CardContent className="flex flex-col h-full overflow-hidden px-3 py-2">
-                {!selectedChunk ? (
-                  <p className="text-sm text-muted-foreground">
-                    Click on a chunk on the left to see its files.
-                  </p>
-                ) : (
-                  <div className="flex flex-col h-full">
-                    <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-                      <div className="space-y-2 px-1" data-chunk-contents>
-                        {(() => {
+                <div className="flex flex-col h-full">
+                  <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+                    <div className="space-y-2 px-1" data-chunk-contents>
+                      {(() => {
+                        let files: Array<{ path: string; size: number }>;
+
+                        if (selectedChunk) {
+                          // Show files from the selected chunk
                           const output =
                             metafile.outputs[selectedChunk.outputFile];
                           const inputsMap = output?.inputs || {};
-                          const files = (selectedChunk.includedInputs || [])
+                          files = (selectedChunk.includedInputs || [])
                             .filter(
                               (p) => showNodeModules || !/node_modules/.test(p)
                             )
@@ -1263,53 +1346,72 @@ export default function ResultsPage() {
                                 (inputsMap[p]?.bytes as number | undefined) ||
                                 0,
                             }));
-                          const tree = buildPathTree(files, showFullPaths);
+                        } else {
+                          // Show all files from the metafile when no chunk is selected
+                          files = metafile
+                            ? Object.entries(metafile.inputs)
+                                .filter(
+                                  ([path]) =>
+                                    showNodeModules ||
+                                    !/node_modules/.test(path)
+                                )
+                                .map(([path, input]) => ({
+                                  path,
+                                  size: input.bytes || 0,
+                                }))
+                            : [];
+                        }
+                        const tree = buildPathTree(files, showFullPaths);
 
-                          // Check if no files are visible due to node_modules filtering
-                          if (files.length === 0 && !showNodeModules) {
-                            return (
-                              <div className="text-center py-8">
-                                <div className="text-sm text-muted-foreground">
-                                  Third-party libraries are hidden. Click the
-                                  eye icon above to show them.
-                                </div>
-                              </div>
-                            );
-                          }
-
-                          // Check if no files are visible due to search filtering
-                          if (files.length === 0 && chunkSearch) {
-                            return (
-                              <div className="text-center py-8">
-                                <div className="text-sm text-muted-foreground">
-                                  No files match your search. Try a different
-                                  search term or clear the search.
-                                </div>
-                              </div>
-                            );
-                          }
-
+                        // Check if no files are visible due to node_modules filtering
+                        if (
+                          files.length === 0 &&
+                          !showNodeModules &&
+                          selectedChunk
+                        ) {
                           return (
-                            <div className="space-y-1 overflow-hidden px-1">
-                              <div className="space-y-2">
-                                {tree.children?.map((child) => (
-                                  <FileTree
-                                    key={child.path || child.name}
-                                    tree={child}
-                                    onSelectFile={onSelectModule}
-                                    selectedPath={selectedModule}
-                                    highlightText={chunkSearch}
-                                    allCollapsed={allCollapsed}
-                                  />
-                                ))}
+                            <div className="text-center py-8">
+                              <div className="text-sm text-muted-foreground">
+                                Third-party libraries are hidden. Click the eye
+                                icon above to show them.
                               </div>
                             </div>
                           );
-                        })()}
-                      </div>
+                        }
+
+                        // Show message when no files are available
+                        if (files.length === 0) {
+                          return (
+                            <div className="text-center py-8">
+                              <div className="text-sm text-muted-foreground">
+                                {selectedChunk
+                                  ? "No files found in this chunk."
+                                  : "No files found in the metafile."}
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="space-y-1 overflow-hidden px-1">
+                            <div className="space-y-2">
+                              {tree.children?.map((child) => (
+                                <FileTree
+                                  key={child.path || child.name}
+                                  tree={child}
+                                  onSelectFile={onSelectModule}
+                                  selectedPath={selectedModule}
+                                  highlightText={chunkSearch}
+                                  allCollapsed={allCollapsed}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
-                )}
+                </div>
               </CardContent>
             </Card>
           </ResizablePanel>
@@ -1351,7 +1453,7 @@ export default function ResultsPage() {
                   </div>
                 </CardHeader>
               )}
-              <CardContent className="flex flex-col gap-6 h-full overflow-hidden px-3 py-2">
+              <CardContent className="flex flex-col gap-6 h-full overflow-y-auto px-3 py-2">
                 {!selectedModule ? (
                   <p className="text-sm text-muted-foreground">
                     Click on a file in the middle panel to see how it&apos;s
@@ -1458,28 +1560,47 @@ export default function ResultsPage() {
                           </TooltipProvider>
                         </h4>
                         <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                          {reverseDeps.map((dep, idx) => {
-                            const chunkContainingFile = chunks.find((chunk) =>
-                              chunk.includedInputs.includes(dep.importer)
-                            );
-                            const canOpen = Boolean(chunkContainingFile);
-                            return (
-                              <ImportItem
-                                key={idx}
-                                dep={dep}
-                                canOpen={canOpen}
-                                onClick={
-                                  canOpen && chunkContainingFile
-                                    ? () =>
-                                        navigateToModule(
-                                          dep.importer,
-                                          chunkContainingFile
-                                        )
-                                    : undefined
-                                }
-                              />
-                            );
-                          })}
+                          {reverseDeps
+                            .sort((a, b) => {
+                              const aIsLazy = a.kind === "dynamic-import";
+                              const bIsLazy = b.kind === "dynamic-import";
+                              if (aIsLazy && !bIsLazy) return 1; // lazy comes after eager
+                              if (!aIsLazy && bIsLazy) return -1; // eager comes before lazy
+                              return 0; // same type, maintain original order
+                            })
+                            .map((dep, idx) => {
+                              const isLazy = dep.kind === "dynamic-import";
+                              const chunkContainingFile = chunks.find((chunk) =>
+                                chunk.includedInputs.includes(dep.importer)
+                              );
+                              const fileExistsInMetafile = Boolean(
+                                metafile?.inputs[dep.importer]
+                              );
+                              // Allow navigation if file exists in metafile, even if not in a chunk (e.g., barrel files)
+                              const canOpen =
+                                Boolean(chunkContainingFile) ||
+                                fileExistsInMetafile;
+                              const isSourceOnly =
+                                fileExistsInMetafile && !chunkContainingFile;
+                              return (
+                                <ImportItem
+                                  key={idx}
+                                  dep={dep}
+                                  canOpen={canOpen}
+                                  isSourceOnly={isSourceOnly}
+                                  isLazy={isLazy}
+                                  onClick={
+                                    canOpen
+                                      ? () =>
+                                          navigateToModule(
+                                            dep.importer,
+                                            chunkContainingFile || undefined
+                                          )
+                                      : undefined
+                                  }
+                                />
+                              );
+                            })}
                         </div>
                       </div>
                     );
@@ -1697,14 +1818,20 @@ export default function ResultsPage() {
                           </Tooltip>
                         </TooltipProvider>
                       </h4>
-                      <ol className="text-sm space-y-3">
-                        <li className="break-all">
-                          {selectedChunk?.entryPoint || "Unknown"}
-                        </li>
-                        {res.path.map((s, idx) => (
-                          <InclusionPathItem key={idx} step={s} />
-                        ))}
-                      </ol>
+                      {(() => {
+                        const rootEntryDisplay =
+                          classifiedChunks?.initial?.entryPoint ||
+                          selectedChunk?.entryPoint ||
+                          "Unknown";
+                        return (
+                          <ol className="text-sm space-y-3">
+                            <li className="break-all">{rootEntryDisplay}</li>
+                            {res.path.map((s, idx) => (
+                              <InclusionPathItem key={idx} step={s} />
+                            ))}
+                          </ol>
+                        );
+                      })()}
                     </div>
                   );
                 })()}

@@ -7,5 +7,5 @@ export function formatBytes(bytes: number): string {
     value /= 1024;
     unitIndex++;
   }
-  return `${value.toFixed(1)} ${units[unitIndex]}`;
+  return `${value.toFixed(3)} ${units[unitIndex]}`;
 }

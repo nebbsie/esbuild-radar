@@ -11,6 +11,7 @@ export interface MetafileInputImportEdge {
   path: string;
   kind: ImportKind;
   external?: boolean;
+  original?: string;
 }
 
 export interface MetafileInput {
@@ -327,6 +328,7 @@ export interface ReverseDependency {
   importer: string;
   kind: ImportKind;
   external?: boolean;
+  original?: string;
 }
 
 export function findReverseDependencies(
@@ -343,6 +345,7 @@ export function findReverseDependencies(
             importer: inputPath,
             kind: imp.kind,
             external: imp.external,
+            original: imp.original,
           });
         }
       }

@@ -164,6 +164,7 @@ export function pickInitialOutput(
   // Build directed graph among candidate entry outputs via static imports
   const candidateSet = new Set(entries);
   const graph = new Map<string, string[]>();
+  const inDegree = new Map<string, number>();
   for (const k of entries) {
     const imps = meta.outputs[k].imports || [];
     const edges = imps
@@ -173,7 +174,16 @@ export function pickInitialOutput(
       )
       .map((i) => i.path);
     graph.set(k, edges);
+    // Track incoming edges among candidate entries
+    if (!inDegree.has(k)) inDegree.set(k, 0);
+    for (const m of edges) {
+      inDegree.set(m, (inDegree.get(m) ?? 0) + 1);
+    }
   }
+
+  // Prefer entries that are NOT imported by any other candidate entry (in-degree = 0)
+  const rootEntries = entries.filter((k) => (inDegree.get(k) ?? 0) === 0);
+  const rankingPool = rootEntries.length > 0 ? rootEntries : entries;
 
   const reachableCount = (start: string) => {
     const seen = new Set<string>();
@@ -191,7 +201,7 @@ export function pickInitialOutput(
   };
 
   // Score candidates
-  const scored = entries.map((k) => {
+  const scored = rankingPool.map((k) => {
     const ep = toPosix(meta.outputs[k].entryPoint!);
     const b = base(ep);
     let s = 0;
