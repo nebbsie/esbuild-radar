@@ -1,17 +1,14 @@
 import { getInclusionPath } from "@/lib/analyser";
 import type { InitialChunkSummary } from "@/lib/metafile";
-import { parseMetafile } from "@/lib/metafile";
-// @ts-ignore - Node.js types available at runtime
-import { readFileSync } from "fs";
 import { describe, expect, it } from "vitest";
+import { getStatsMetafile } from "./test-helpers";
 
-const statsPath = new URL("../stats.json", import.meta.url);
-const meta = parseMetafile(JSON.parse(readFileSync(statsPath, "utf-8")));
+const metafile = getStatsMetafile();
 
 // Create mock chunks for testing
-const mockChunks: InitialChunkSummary[] = Object.keys(meta.outputs).map(
+const mockChunks: InitialChunkSummary[] = Object.keys(metafile.outputs).map(
   (outputFile) => {
-    const out = meta.outputs[outputFile];
+    const out = metafile.outputs[outputFile];
     return {
       outputFile,
       bytes: out.bytes || 0,
@@ -24,13 +21,17 @@ const mockChunks: InitialChunkSummary[] = Object.keys(meta.outputs).map(
 
 describe("getInclusionPath", () => {
   it("should return empty array for non-existent file", () => {
-    const result = getInclusionPath(meta, "non-existent-file.js", []);
+    const result = getInclusionPath(metafile, "non-existent-file.js", []);
     expect(result).toEqual([]);
   });
 
   it("should return inclusion path for a valid file", () => {
     // Test with a known file from the stats
-    const result = getInclusionPath(meta, "src/bits/app.module.ts", mockChunks);
+    const result = getInclusionPath(
+      metafile,
+      "src/bits/app.module.ts",
+      mockChunks
+    );
     expect(Array.isArray(result)).toBe(true);
     // The result should contain objects with file, importStatement, isDynamicImport, and importerChunkType
     if (result.length > 0) {
@@ -45,7 +46,7 @@ describe("getInclusionPath", () => {
 
   it("should return correct inclusion path for textCorpus.ts", () => {
     const result = getInclusionPath(
-      meta,
+      metafile,
       "src/@freelancer/datastore/testing/helpers/textCorpus.ts",
       mockChunks
     );
@@ -89,7 +90,7 @@ describe("getInclusionPath", () => {
 
   it("should return correct inclusion path for io-docs.component.ts", () => {
     const result = getInclusionPath(
-      meta,
+      metafile,
       "src/bits/base/components/io-docs.component.ts",
       mockChunks
     );
@@ -139,7 +140,7 @@ describe("getInclusionPath", () => {
 
   it("should return correct inclusion path for table-stories.routing.ts", () => {
     const result = getInclusionPath(
-      meta,
+      metafile,
       "src/bits/generated/table/table-stories.routing.ts",
       mockChunks
     );
@@ -182,7 +183,7 @@ describe("getInclusionPath", () => {
     // 2. Dynamic import that creates a lazy chunk
     // 3. Subsequent imports within the lazy chunk
     const result = getInclusionPath(
-      meta,
+      metafile,
       "src/bits/base/components/io-docs.component.ts",
       mockChunks
     );

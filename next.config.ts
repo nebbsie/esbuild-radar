@@ -11,6 +11,9 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: false,
   },
+  turbopack: {
+    root: "/Users/aaronnebbs/freelancer-dev/esbuild-analyser",
+  },
 };
 
 export default nextConfig;

@@ -1,9 +1,8 @@
 import { getImportSources } from "@/lib/analyser";
-import type { Metafile } from "@/lib/metafile";
-import { readFileSync } from "fs";
 import { describe, expect, it } from "vitest";
+import { getStatsMetafile } from "./test-helpers";
 
-const metafile: Metafile = JSON.parse(readFileSync("stats.json", "utf-8"));
+const metafile = getStatsMetafile();
 
 describe("getImportSources", () => {
   // Mock chunks data - this would normally come from summarizeInitial

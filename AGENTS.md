@@ -1,0 +1,11 @@
+- Use Bun as the runtime.
+- Do not delete tests to fix them — fix the logic of the code instead.
+- Follow Next.js best practices for performance.
+- Keep logic in separate, well-documented files and functions.
+- Use Shadcn components and clean Radix design patterns.
+- Always consider responsive design.
+- Store application logic in ./lib.
+- Store reusable components in ./components.
+- Write tests for logic and put them in ./tests.
+- Write and use test helpers in ./tests/test-helpers.ts if needed.
+- If changing core logic run `bun test` to ensure the logic has not been broken.
