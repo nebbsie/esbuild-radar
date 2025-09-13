@@ -351,17 +351,17 @@ export default function ResultsPage() {
 
     if (chunkChanged) {
       setSelectedChunk(chunkContainingModule);
+    }
 
-      // Only select the entry point if it's actually included in this chunk
-      const rootEntry =
-        classifiedChunks?.initial?.entryPoint ||
-        chunkContainingModule.entryPoint;
-      if (metafile && rootEntry) {
-        const res = findInclusionPath(metafile, rootEntry, mod);
-        setInclusion(res);
-      } else {
-        setInclusion(null);
-      }
+    // Always calculate inclusion path when a module is selected
+    const rootEntry =
+      classifiedChunks?.initial?.entryPoint ||
+      (chunkContainingModule || selectedChunk)?.entryPoint;
+    if (metafile && rootEntry) {
+      const res = findInclusionPath(metafile, rootEntry, mod);
+      setInclusion(res);
+    } else {
+      setInclusion(null);
     }
 
     // Scroll to the selected module after DOM updates
@@ -965,7 +965,25 @@ export default function ResultsPage() {
                       setSelectedModule(
                         entryPointInChunk ? initialChunk.entryPoint : null
                       );
-                      setInclusion(null);
+
+                      // Calculate inclusion path for the entry point
+                      if (
+                        metafile &&
+                        initialChunk.entryPoint &&
+                        entryPointInChunk
+                      ) {
+                        const rootEntry =
+                          classifiedChunks?.initial?.entryPoint ||
+                          initialChunk.entryPoint;
+                        const res = findInclusionPath(
+                          metafile,
+                          rootEntry,
+                          initialChunk.entryPoint
+                        );
+                        setInclusion(res);
+                      } else {
+                        setInclusion(null);
+                      }
 
                       // Scroll the entry point file into view if it was selected
                       if (entryPointInChunk) {
@@ -1238,7 +1256,24 @@ export default function ResultsPage() {
                             navigateToModule(c.entryPoint, c);
                           } else {
                             setSelectedModule(null);
-                            setInclusion(null);
+                            // Still calculate inclusion path even if no entry point
+                            const rootEntry =
+                              classifiedChunks?.initial?.entryPoint ||
+                              c.entryPoint;
+                            if (metafile && rootEntry) {
+                              // Find a suitable module in this chunk to show inclusion path for
+                              const firstModule = c.includedInputs[0];
+                              if (firstModule) {
+                                const res = findInclusionPath(
+                                  metafile,
+                                  rootEntry,
+                                  firstModule
+                                );
+                                setInclusion(res);
+                              }
+                            } else {
+                              setInclusion(null);
+                            }
                           }
                         }}
                         isSelected={selectedChunk?.outputFile === c.outputFile}
