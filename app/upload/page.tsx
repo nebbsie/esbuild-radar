@@ -11,6 +11,7 @@ export default function UploadPage() {
   const router = useRouter();
   const [isDragOver, setIsDragOver] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [metafileName, setMetafileName] = React.useState("");
 
   React.useEffect(() => {
     // Clear any existing data when component mounts
@@ -30,7 +31,10 @@ export default function UploadPage() {
       parseMetafile(json);
 
       // Store in IndexedDB using the storage service
-      await metafileStorage.storeMetafile(JSON.stringify(json));
+      await metafileStorage.storeMetafile(
+        JSON.stringify(json),
+        metafileName || "Demo Metafile"
+      );
       router.push("/results");
     } catch (err) {
       console.error("Failed to load demo metafile:", err);
@@ -48,7 +52,10 @@ export default function UploadPage() {
       // Validate that it's a proper esbuild metafile
       parseMetafile(json);
       // Store in IndexedDB using the storage service
-      await metafileStorage.storeMetafile(JSON.stringify(json));
+      await metafileStorage.storeMetafile(
+        JSON.stringify(json),
+        metafileName || undefined
+      );
       router.push("/results");
     } catch (err) {
       console.error("Failed to process metafile:", err);
@@ -90,7 +97,20 @@ export default function UploadPage() {
             Upload your stats.json file or try our demo
           </p>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <label htmlFor="metafile-name" className="text-sm font-medium">
+              Metafile Name (optional)
+            </label>
+            <input
+              id="metafile-name"
+              type="text"
+              placeholder="Enter a name for this metafile..."
+              value={metafileName}
+              onChange={(e) => setMetafileName(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+            />
+          </div>
           <div
             className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
               isDragOver

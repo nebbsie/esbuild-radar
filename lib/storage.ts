@@ -1,3 +1,8 @@
+interface MetafileData {
+  data: string;
+  name?: string;
+}
+
 class MetafileStorage {
   private dbName = "esbuild-analyser";
   private dbVersion = 1;
@@ -20,12 +25,13 @@ class MetafileStorage {
     });
   }
 
-  async storeMetafile(data: string): Promise<void> {
+  async storeMetafile(data: string, name?: string): Promise<void> {
     try {
       const db = await this.openDatabase();
       const tx = db.transaction([this.storeName], "readwrite");
       const store = tx.objectStore(this.storeName);
-      await store.put(data, this.keyName);
+      const metafileData: MetafileData = { data, name };
+      await store.put(metafileData, this.keyName);
       tx.commit();
       db.close();
     } catch (err) {
@@ -34,7 +40,7 @@ class MetafileStorage {
     }
   }
 
-  async loadMetafile(): Promise<string | null> {
+  async loadMetafile(): Promise<{ data: string; name?: string } | null> {
     try {
       const db = await this.openDatabase();
       const tx = db.transaction([this.storeName], "readonly");

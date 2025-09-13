@@ -95,6 +95,17 @@ export default function ResultsPage() {
   const [inclusion, setInclusion] = React.useState<InclusionPathResult | null>(
     null
   );
+  const [metafileName, setMetafileName] = React.useState<string>("");
+
+  // Update page title when metafile name changes
+  React.useEffect(() => {
+    const baseTitle = "Esbuild Radar";
+    if (metafileName) {
+      document.title = `${metafileName} • ${baseTitle}`;
+    } else {
+      document.title = baseTitle;
+    }
+  }, [metafileName]);
 
   // Load persisted settings
   const [showNodeModules, setShowNodeModules] = usePersistentState<boolean>(
@@ -248,7 +259,8 @@ export default function ResultsPage() {
     metafileStorage.loadMetafile().then((storedData) => {
       if (storedData) {
         try {
-          const json = JSON.parse(storedData);
+          const json = JSON.parse(storedData.data);
+          setMetafileName(storedData.name || "");
           const mf = parseMetafile(json);
 
           // Pick the initial chunk
@@ -805,6 +817,7 @@ export default function ResultsPage() {
     setSelectedChunk(null);
     setSelectedModule(null);
     setInclusion(null);
+    setMetafileName("");
   }
 
   function handleFileUpload() {
@@ -972,6 +985,11 @@ export default function ResultsPage() {
                   }}
                 >
                   <TooltipProvider>
+                    {metafileName && (
+                      <div className="text-sm font-medium text-muted-foreground mb-2">
+                        {metafileName}
+                      </div>
+                    )}
                     <div className="text-xs text-primary mb-2">
                       Initial Bundle
                     </div>
