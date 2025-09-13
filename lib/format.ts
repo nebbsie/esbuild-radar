@@ -7,5 +7,8 @@ export function formatBytes(bytes: number): string {
     value /= 1024;
     unitIndex++;
   }
-  return `${value.toFixed(3)} ${units[unitIndex]}`;
+
+  // Use no decimals for B and KB, 3 decimals for MB and GB
+  const decimals = unitIndex < 2 ? 0 : 3;
+  return `${value.toFixed(decimals)} ${units[unitIndex]}`;
 }

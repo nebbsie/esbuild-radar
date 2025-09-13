@@ -1617,11 +1617,54 @@ export default function ResultsPage() {
                                       {step.importStatement}
                                     </code>
                                   </div>
-                                  {step.isDynamicImport && (
-                                    <div className="text-xs text-purple-600 mt-0.5">
-                                      ⚡ Creates lazy-loaded module
-                                    </div>
-                                  )}
+                                  {step.isDynamicImport &&
+                                    (() => {
+                                      // Find the chunk created by this dynamic import
+                                      const dynamicImportPath =
+                                        step.importStatement.replace(
+                                          /^["']|["']$/g,
+                                          ""
+                                        );
+
+                                      // Look for chunks that have this path as their entry point or contain files from this path
+                                      const createdChunk = chunks.find(
+                                        (chunk) => {
+                                          // Check if this chunk's entry point matches the dynamic import
+                                          if (
+                                            chunk.entryPoint.includes(
+                                              dynamicImportPath.replace(
+                                                "./",
+                                                ""
+                                              )
+                                            )
+                                          ) {
+                                            return true;
+                                          }
+                                          // Or check if any included input matches the dynamic import path
+                                          return chunk.includedInputs.some(
+                                            (input) =>
+                                              input.includes(
+                                                dynamicImportPath.replace(
+                                                  "./",
+                                                  ""
+                                                )
+                                              )
+                                          );
+                                        }
+                                      );
+
+                                      return (
+                                        <div className="text-xs text-purple-600 mt-0.5">
+                                          ⚡ Creates lazy-loaded module
+                                          {createdChunk && (
+                                            <span className="ml-1">
+                                              ({createdChunk.outputFile} -{" "}
+                                              {formatBytes(createdChunk.bytes)})
+                                            </span>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
                                 </div>
                                 {chunkContainingFile && (
                                   <div
