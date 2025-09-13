@@ -21,6 +21,26 @@ export default function UploadPage() {
     fileInputRef.current?.click();
   }
 
+  async function loadDemo() {
+    try {
+      const response = await fetch("/demo-stats.json");
+      const json = await response.json();
+
+      // Validate that it's a proper esbuild metafile
+      parseMetafile(json);
+
+      // Store in IndexedDB using the storage service
+      await metafileStorage.storeMetafile(JSON.stringify(json));
+      router.push("/results");
+    } catch (err) {
+      console.error("Failed to load demo metafile:", err);
+      alert(
+        "Failed to load demo metafile: " +
+          (err instanceof Error ? err.message : "Unknown error")
+      );
+    }
+  }
+
   async function processFile(file: File) {
     try {
       const text = await file.text();
@@ -66,6 +86,9 @@ export default function UploadPage() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="text-center">Upload esbuild metafile</CardTitle>
+          <p className="text-sm text-muted-foreground text-center">
+            Upload your stats.json file or try our demo
+          </p>
         </CardHeader>
         <CardContent>
           <div
@@ -82,7 +105,12 @@ export default function UploadPage() {
               <div className="text-muted-foreground">
                 Drag and drop your stats.json file here, or click to select.
               </div>
-              <Button onClick={onChooseFile}>Select File</Button>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Button onClick={onChooseFile}>Select File</Button>
+                <Button variant="outline" onClick={loadDemo}>
+                  Try Demo
+                </Button>
+              </div>
             </div>
             <input
               ref={fileInputRef}
