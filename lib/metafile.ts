@@ -42,7 +42,7 @@ export interface Metafile {
   outputs: Record<string, MetafileOutput>;
 }
 
-export interface EagerChunkSummary {
+export interface InitialChunkSummary {
   outputFile: string;
   bytes: number;
   entryPoint: string;
@@ -93,7 +93,7 @@ export function getEntryInputs(meta: Metafile): string[] {
 }
 
 // Compute all outputs downloaded initially: the closure from entry outputs following non-dynamic imports between outputs.
-export function getInitialEagerOutputs(meta: Metafile): EagerChunkSummary[] {
+export function getInitialOutputs(meta: Metafile): InitialChunkSummary[] {
   const entryOutputs = getEntryOutputs(meta);
   const visited = new Set<string>();
   const queue: string[] = [];
@@ -122,7 +122,7 @@ export function getInitialEagerOutputs(meta: Metafile): EagerChunkSummary[] {
     }
   }
 
-  const summaries: EagerChunkSummary[] = [];
+  const summaries: InitialChunkSummary[] = [];
   for (const outputFile of visited) {
     // Only show JS files for "code downloaded"
     if (!isJsOutput(outputFile)) continue;
@@ -142,11 +142,11 @@ export function getInitialEagerOutputs(meta: Metafile): EagerChunkSummary[] {
   return summaries;
 }
 
-export function getInitialEagerOutputsForEntry(
+export function getInitialOutputsForEntry(
   meta: Metafile,
   entryInput: string,
   options?: { browserOnly?: boolean }
-): EagerChunkSummary[] {
+): InitialChunkSummary[] {
   const browserOnly = options?.browserOnly !== false;
   const startOutputs = Object.entries(meta.outputs)
     .filter(([file, out]) => out.entryPoint === entryInput && isJsOutput(file))
@@ -169,7 +169,7 @@ export function getInitialEagerOutputsForEntry(
       }
     }
   }
-  const summaries: EagerChunkSummary[] = [];
+  const summaries: InitialChunkSummary[] = [];
   for (const outputFile of visited) {
     if (!isJsOutput(outputFile)) continue;
     if (browserOnly && isLikelyServerFile(outputFile)) continue;

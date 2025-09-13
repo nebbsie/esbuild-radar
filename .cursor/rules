@@ -1,0 +1,6 @@
+- use bun.
+- don't delete tests to fix them, fix the logic of the code.
+- use next js best practices for performance
+- keep logic in seperate well documented files / functions
+- use chadcn components, clean radix design
+- always think about responsive design

@@ -1,10 +1,17 @@
 // Bundle analysis helpers used by the UI. Keep UI rendering out of this file.
 
-import type { EagerChunkSummary, Metafile } from "@/lib/metafile";
+import type {
+  ImportKind,
+  InclusionPathResult,
+  InclusionPathStep,
+  InitialChunkSummary,
+  Metafile,
+} from "@/lib/metafile";
 
 /** Returns true for JavaScript outputs we care about for initial/lazy download. */
 export function isJsOutput(file: string): boolean {
-  return /\.(mjs|cjs|js)(\?.*)?$/i.test(file);
+  // Only include .js and .cjs outputs (exclude .mjs)
+  return /\.(?:js|cjs)(\?.*)?$/i.test(file);
 }
 
 /** Heuristic to exclude server-only artifacts from the browser analysis. */
@@ -48,10 +55,12 @@ export function inferEntryForOutput(
 }
 
 /**
- * Returns all JS browser outputs as summary objects (eager + lazy, unsorted).
+ * Returns all JS browser outputs as summary objects (initial + lazy, unsorted).
  */
-export function computeAllOutputSummaries(meta: Metafile): EagerChunkSummary[] {
-  const all: EagerChunkSummary[] = [];
+export function computeAllOutputSummaries(
+  meta: Metafile
+): InitialChunkSummary[] {
+  const all: InitialChunkSummary[] = [];
   for (const [file, out] of Object.entries(meta.outputs)) {
     if (!isJsOutput(file) || isLikelyServerOutput(file)) continue;
     const includedInputs = Object.keys(out.inputs || {});
@@ -70,7 +79,7 @@ export function computeAllOutputSummaries(meta: Metafile): EagerChunkSummary[] {
  * Computes the set of outputs that are statically reachable from entry outputs
  * by traversing only non-dynamic (static) import edges across outputs.
  */
-export function computeEagerOutputsSet(meta: Metafile): Set<string> {
+export function computeInitialOutputsSet(meta: Metafile): Set<string> {
   const entryOutputs = Object.entries(meta.outputs)
     .filter(
       ([f, o]) => o.entryPoint && isJsOutput(f) && !isLikelyServerOutput(f)
@@ -112,26 +121,26 @@ export function listDynamicImportingOutputs(
 }
 
 export type LoadClassification = {
-  kind: "eager" | "lazy";
+  kind: "initial" | "lazy";
   importers?: string[];
 };
 
 /**
- * Classifies an output as eager or lazy using computeEagerOutputsSet. Lazy if
+ * Classifies an output as initial or lazy using computeInitialOutputsSet. Lazy if
  * not statically reachable from entries. Returns dynamic importers for context.
  */
 export function classifyOutputLoadType(
   meta: Metafile,
   outputFile: string
 ): LoadClassification {
-  const eager = computeEagerOutputsSet(meta);
-  if (!eager.has(outputFile)) {
+  const initial = computeInitialOutputsSet(meta);
+  if (!initial.has(outputFile)) {
     return {
       kind: "lazy",
       importers: listDynamicImportingOutputs(meta, outputFile),
     };
   }
-  return { kind: "eager" };
+  return { kind: "initial" };
 }
 
 /** Picks the most likely initial (entry) output using heuristics from test.ts */
@@ -218,31 +227,38 @@ export function pickInitialOutput(
 }
 
 export interface ClassifiedChunks {
-  initial: EagerChunkSummary | undefined;
-  eager: EagerChunkSummary[];
-  lazy: EagerChunkSummary[];
+  initial: InitialChunkSummary | undefined;
+  initialChunks: InitialChunkSummary[];
+  lazy: InitialChunkSummary[];
 }
 
 /**
- * Traverses from the initial output to classify all reachable chunks as initial, eager, or lazy
- * based on how they are imported (entry-point = initial, import-statement = eager, dynamic-import = lazy).
+ * Traverses from the initial output to classify all reachable chunks as initial or lazy
+ * based on how they are imported (entry-point = initial, import-statement = initial, dynamic-import = lazy).
  * Includes the initial chunk in the results.
  */
 export function classifyChunksFromInitial(
   meta: Metafile,
   initialOutput: string
 ): ClassifiedChunks {
-  const eager: EagerChunkSummary[] = [];
-  const lazy: EagerChunkSummary[] = [];
+  const initialChunks: InitialChunkSummary[] = [];
+  const lazy: InitialChunkSummary[] = [];
   const visited = new Set<string>();
   const queue: Array<{ output: string; importKind: string }> = [];
 
   // Create the initial chunk summary
   const initialOut = meta.outputs[initialOutput];
   if (!initialOut)
-    return { initial: undefined as EagerChunkSummary | undefined, eager, lazy };
+    return {
+      initial: undefined as InitialChunkSummary | undefined,
+      initialChunks,
+      lazy,
+    };
 
-  const initialChunk: EagerChunkSummary = {
+  // Mark initial as visited so it can never be enqueued again and avoids duplicates
+  visited.add(initialOutput);
+
+  const initialChunk: InitialChunkSummary = {
     outputFile: initialOutput,
     bytes: initialOut.bytes || 0,
     entryPoint:
@@ -268,7 +284,7 @@ export function classifyChunksFromInitial(
     if (!out) continue;
 
     // Create chunk summary
-    const chunk: EagerChunkSummary = {
+    const chunk: InitialChunkSummary = {
       outputFile: output,
       bytes: out.bytes || 0,
       entryPoint: out.entryPoint || inferEntryForOutput(meta, output) || "",
@@ -276,11 +292,14 @@ export function classifyChunksFromInitial(
       includedInputs: Object.keys(out.inputs || {}),
     };
 
-    // Classify based on import kind
-    if (importKind === "dynamic-import") {
-      lazy.push(chunk);
-    } else {
-      eager.push(chunk);
+    // Skip if this output is the same as the initial chunk (extra guard)
+    if (output !== initialOutput) {
+      // Classify based on import kind
+      if (importKind === "dynamic-import") {
+        lazy.push(chunk);
+      } else {
+        initialChunks.push(chunk);
+      }
     }
 
     // Add this chunk's imports to queue (preserve the import kind that reached it)
@@ -289,15 +308,199 @@ export function classifyChunksFromInitial(
       if (!meta.outputs[imp.path]) continue;
       if (!isJsOutput(imp.path) || isLikelyServerOutput(imp.path)) continue;
       if (!visited.has(imp.path)) {
-        // Use the same import kind that reached this chunk
-        queue.push({ output: imp.path, importKind });
+        // Use the actual kind of this import edge, **not** the parent edge kind
+        queue.push({ output: imp.path, importKind: imp.kind });
       }
     }
   }
 
   // Sort by size (largest first)
-  eager.sort((a, b) => b.bytes - a.bytes);
+  initialChunks.sort((a, b) => b.bytes - a.bytes);
   lazy.sort((a, b) => b.bytes - a.bytes);
 
-  return { initial: initialChunk, eager, lazy };
+  return { initial: initialChunk, initialChunks, lazy };
+}
+
+// Compute an inclusion path from entry input to target input using the inputs graph.
+// Includes both static and dynamic imports.
+function findInclusionPathIncludingDynamic(
+  meta: Metafile,
+  entryInput: string,
+  targetInput: string
+): InclusionPathResult {
+  if (entryInput === targetInput) return { found: true, path: [] };
+
+  const queue: string[] = [entryInput];
+  const visited = new Set<string>([entryInput]);
+  const parent: Record<string, { prev: string; kind: ImportKind } | undefined> =
+    {};
+
+  while (queue.length) {
+    const current = queue.shift() as string;
+    const node = meta.inputs[current];
+    if (!node) continue;
+    const edges = node.imports || [];
+    for (const edge of edges) {
+      // Include both static and dynamic imports
+      const next = edge.path;
+      if (!visited.has(next)) {
+        visited.add(next);
+        parent[next] = { prev: current, kind: edge.kind };
+        if (next === targetInput) {
+          // reconstruct
+          const steps: InclusionPathStep[] = [];
+          let cur = next;
+          while (cur !== entryInput) {
+            const p = parent[cur]!;
+            steps.push({ from: p.prev, to: cur, kind: p.kind });
+            cur = p.prev;
+          }
+          steps.reverse();
+          return { found: true, path: steps };
+        }
+        queue.push(next);
+      }
+    }
+  }
+
+  return { found: false, path: [] };
+}
+
+/**
+ * Returns the inclusion path for a file from the appropriate entry point,
+ * showing the actual import statements used in each step.
+ * This follows both static and dynamic imports.
+ * This is a convenience function that automatically determines the entry point.
+ */
+export interface InclusionStep {
+  file: string;
+  importStatement: string;
+  isDynamicImport: boolean;
+  importerChunkType: "initial" | "lazy";
+}
+
+export function getInclusionPath(
+  meta: Metafile,
+  targetFile: string,
+  chunks: InitialChunkSummary[]
+): InclusionStep[] {
+  // Find the initial entry point
+  const initialOutput = pickInitialOutput(meta);
+  if (!initialOutput) {
+    return [];
+  }
+
+  // Get the entry point for the initial output
+  const initialOut = meta.outputs[initialOutput];
+  const entryPoint =
+    initialOut?.entryPoint || inferEntryForOutput(meta, initialOutput);
+
+  if (!entryPoint) {
+    return [];
+  }
+
+  // Determine which outputs are initial (contain the main entry point)
+  const initialOutputs = chunks
+    .filter((chunk) => chunk.isEntry && chunk.entryPoint === entryPoint)
+    .map((chunk) => chunk.outputFile);
+
+  // Find the inclusion path (following both static and dynamic imports)
+  const result = findInclusionPathIncludingDynamic(
+    meta,
+    entryPoint,
+    targetFile
+  );
+  if (!result.found) return [];
+
+  // Convert the path to show actual import statements with import type info
+  const inclusionSteps: InclusionStep[] = [];
+
+  for (const step of result.path) {
+    const input = meta.inputs[step.from];
+    if (!input) continue;
+
+    // Find the import that leads to the 'to' file
+    const importEdge = input.imports?.find((imp) => imp.path === step.to);
+    if (importEdge) {
+      // Determine which chunk contains the importer
+      const chunkContainingImporter = chunks.find((chunk) =>
+        chunk.includedInputs.includes(step.from)
+      );
+
+      // Determine chunk type
+      const importerChunkType =
+        chunkContainingImporter &&
+        initialOutputs.includes(chunkContainingImporter.outputFile)
+          ? ("initial" as const)
+          : ("lazy" as const);
+
+      inclusionSteps.push({
+        file: step.from,
+        importStatement: importEdge.original || importEdge.path,
+        isDynamicImport: importEdge.kind === "dynamic-import",
+        importerChunkType,
+      });
+    }
+  }
+
+  return inclusionSteps;
+}
+
+/**
+ * Returns information about where a file is imported from and the loading type of each importer.
+ * This is useful for understanding the impact of a file on the bundle.
+ */
+export interface ImportSource {
+  importer: string; // The file that imports the target
+  importStatement: string; // The import statement used (original or resolved path)
+  chunkType: "initial" | "lazy"; // Whether the importer is initial or lazy loaded
+  chunkOutputFile?: string; // Which chunk file contains the importer
+  chunkSize?: number; // Size of the chunk containing the importer
+  isDynamicImport: boolean; // Whether this is a dynamic import
+}
+
+export function getImportSources(
+  meta: Metafile,
+  targetFile: string,
+  chunks: InitialChunkSummary[],
+  initialOutputs: string[]
+): ImportSource[] {
+  const sources: ImportSource[] = [];
+
+  // Build reverse dependencies by scanning all inputs
+  for (const [inputPath, input] of Object.entries(meta.inputs)) {
+    if (input.imports) {
+      for (const imp of input.imports) {
+        if (imp.path === targetFile) {
+          // Find which chunk contains this importer
+          const chunkContainingImporter = chunks.find((chunk) =>
+            chunk.includedInputs.includes(inputPath)
+          );
+
+          // Determine chunk type by checking if chunk output is in initial outputs
+          const chunkType =
+            chunkContainingImporter &&
+            initialOutputs.includes(chunkContainingImporter.outputFile)
+              ? "initial"
+              : "lazy";
+
+          sources.push({
+            importer: inputPath,
+            importStatement: imp.original || imp.path,
+            chunkType,
+            chunkOutputFile: chunkContainingImporter?.outputFile,
+            chunkSize: chunkContainingImporter?.bytes,
+            isDynamicImport: imp.kind === "dynamic-import",
+          });
+        }
+      }
+    }
+  }
+
+  // Sort: initial imports first, then lazy imports
+  return sources.sort((a, b) => {
+    if (a.chunkType === "initial" && b.chunkType === "lazy") return -1;
+    if (a.chunkType === "lazy" && b.chunkType === "initial") return 1;
+    return 0; // same type, maintain original order
+  });
 }

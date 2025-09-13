@@ -22,32 +22,25 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  classifyChunksFromInitial,
+  getImportSources,
+  getInclusionPath,
   inferEntryForOutput,
   pickInitialOutput,
-  type ClassifiedChunks,
 } from "@/lib/analyser";
 import { formatBytes } from "@/lib/format";
 import { usePersistentState } from "@/lib/hooks/use-persistent-state";
+import { summarizeInitial } from "@/lib/initial-summary";
 import type {
-  EagerChunkSummary,
   InclusionPathResult,
   InclusionPathStep,
+  InitialChunkSummary,
   Metafile,
-  ReverseDependency,
 } from "@/lib/metafile";
-import {
-  findInclusionPath,
-  findReverseDependencies,
-  getModuleDetails,
-  getModuleImports,
-  parseMetafile,
-} from "@/lib/metafile";
+import { findInclusionPath, parseMetafile } from "@/lib/metafile";
 import { buildPathTree } from "@/lib/path-tree";
 import { metafileStorage } from "@/lib/storage";
 import {
   ArrowLeft,
-  ArrowRight,
   Clock,
   Eye,
   EyeOff,
@@ -55,10 +48,8 @@ import {
   FileText,
   Filter,
   HelpCircle,
-  Hourglass,
   Minimize2,
   Search,
-  Star,
   Upload,
   X,
   Zap,
@@ -77,18 +68,19 @@ const STORAGE_KEYS = {
 // Default values
 const DEFAULT_FILTERS = {
   initial: true,
-  eager: true,
   lazy: false,
 };
 
 export default function ResultsPage() {
   const router = useRouter();
   const [metafile, setMetafile] = React.useState<Metafile | null>(null);
-  const [chunks, setChunks] = React.useState<EagerChunkSummary[]>([]);
-  const [classifiedChunks, setClassifiedChunks] =
-    React.useState<ClassifiedChunks | null>(null);
+  const [chunks, setChunks] = React.useState<InitialChunkSummary[]>([]);
+  const [initialSummary, setInitialSummary] = React.useState<{
+    initial: { outputs: string[]; totalBytes: number };
+    lazy: { outputs: string[]; totalBytes: number };
+  } | null>(null);
   const [selectedChunk, setSelectedChunk] =
-    React.useState<EagerChunkSummary | null>(null);
+    React.useState<InitialChunkSummary | null>(null);
   const [selectedModule, setSelectedModule] = React.useState<string | null>(
     null
   );
@@ -134,7 +126,7 @@ export default function ResultsPage() {
 
   // Navigation history functions
   const findBestChunkForFile = React.useCallback(
-    (filePath: string): EagerChunkSummary | undefined => {
+    (filePath: string): InitialChunkSummary | undefined => {
       // First, try to find a chunk that directly contains this file
       const directChunk = chunks.find((chunk) =>
         chunk.includedInputs.includes(filePath)
@@ -159,7 +151,7 @@ export default function ResultsPage() {
   );
 
   const navigateToModule = React.useCallback(
-    (modulePath: string, chunk?: EagerChunkSummary, skipHistory = false) => {
+    (modulePath: string, chunk?: InitialChunkSummary, skipHistory = false) => {
       if (!skipHistory && selectedModule && selectedModule !== modulePath) {
         // Add current module to history before navigating (unless skipping)
         setModuleHistory((prev) => [...prev, selectedModule]);
@@ -173,8 +165,22 @@ export default function ResultsPage() {
       if (targetChunk) {
         setSelectedChunk(targetChunk);
         if (metafile) {
-          const rootEntry =
-            classifiedChunks?.initial?.entryPoint || targetChunk.entryPoint;
+          // Compute initial chunk entry point inline
+          const currentInitialChunk =
+            initialSummary && metafile
+              ? (() => {
+                  const firstInitialOutput = initialSummary.initial.outputs[0];
+                  if (!firstInitialOutput) return null;
+                  const out = metafile.outputs[firstInitialOutput];
+                  return (
+                    out?.entryPoint ||
+                    inferEntryForOutput(metafile, firstInitialOutput) ||
+                    ""
+                  );
+                })()
+              : null;
+
+          const rootEntry = currentInitialChunk || targetChunk.entryPoint;
           if (metafile && rootEntry) {
             const res = findInclusionPath(metafile, rootEntry, modulePath);
             setInclusion(res);
@@ -201,7 +207,7 @@ export default function ResultsPage() {
         }
       }, 100);
     },
-    [selectedModule, metafile, findBestChunkForFile, classifiedChunks]
+    [selectedModule, metafile, findBestChunkForFile, initialSummary]
   );
 
   const goBackToPreviousModule = React.useCallback(() => {
@@ -244,33 +250,81 @@ export default function ResultsPage() {
 
   // Note: initial output is determined on load; no need to memoize separately
   const initialChunk = React.useMemo(() => {
-    return classifiedChunks?.initial || null;
-  }, [classifiedChunks]);
+    if (!initialSummary || !metafile) return null;
+    const firstInitialOutput = initialSummary.initial.outputs[0];
+    if (!firstInitialOutput) return null;
+    const out = metafile.outputs[firstInitialOutput];
+    if (!out) return null;
+    return {
+      outputFile: firstInitialOutput,
+      bytes: out.bytes || 0,
+      entryPoint:
+        out.entryPoint ||
+        inferEntryForOutput(metafile, firstInitialOutput) ||
+        "",
+      isEntry: Boolean(out.entryPoint),
+      includedInputs: Object.keys(out.inputs || {}),
+    };
+  }, [initialSummary, metafile]);
 
-  // Get only the chunks that are loaded initially (eager + initial)
+  // Get only the chunks that are loaded initially
   const initialBundleChunks = React.useMemo(() => {
-    if (!classifiedChunks) return [];
-    return [classifiedChunks.initial, ...classifiedChunks.eager].filter(
-      Boolean
-    );
-  }, [classifiedChunks]);
+    if (!initialSummary || !metafile) return [];
+    return initialSummary.initial.outputs
+      .map((outputFile) => {
+        const out = metafile.outputs[outputFile];
+        if (!out) return null;
+        return {
+          outputFile,
+          bytes: out.bytes || 0,
+          entryPoint:
+            out.entryPoint || inferEntryForOutput(metafile, outputFile) || "",
+          isEntry: Boolean(out.entryPoint),
+          includedInputs: Object.keys(out.inputs || {}),
+        };
+      })
+      .filter((chunk): chunk is InitialChunkSummary => Boolean(chunk))
+      .sort((a, b) => b.bytes - a.bytes); // Sort by size (largest first)
+  }, [initialSummary, metafile]);
 
-  // Separate eager and lazy chunks for the new UI sections
-  const eagerChunks = React.useMemo(() => {
-    if (!classifiedChunks) return [];
-    return [classifiedChunks.initial, ...classifiedChunks.eager].filter(
-      (chunk): chunk is EagerChunkSummary => Boolean(chunk)
-    );
-  }, [classifiedChunks]);
+  // Separate initial and lazy chunks for the new UI sections
+  const initialChunks = React.useMemo(() => {
+    if (!initialSummary || !metafile) return [];
+    return initialSummary.initial.outputs
+      .map((outputFile) => {
+        const out = metafile.outputs[outputFile];
+        if (!out) return null;
+        return {
+          outputFile,
+          bytes: out.bytes || 0,
+          entryPoint:
+            out.entryPoint || inferEntryForOutput(metafile, outputFile) || "",
+          isEntry: Boolean(out.entryPoint),
+          includedInputs: Object.keys(out.inputs || {}),
+        };
+      })
+      .filter((chunk): chunk is InitialChunkSummary => Boolean(chunk))
+      .sort((a, b) => b.bytes - a.bytes); // Sort by size (largest first)
+  }, [initialSummary, metafile]);
 
   const lazyChunks = React.useMemo(() => {
-    if (!classifiedChunks) return [];
-    return (
-      classifiedChunks.lazy.filter((chunk): chunk is EagerChunkSummary =>
-        Boolean(chunk)
-      ) || []
-    );
-  }, [classifiedChunks]);
+    if (!initialSummary || !metafile) return [];
+    return initialSummary.lazy.outputs
+      .map((outputFile) => {
+        const out = metafile.outputs[outputFile];
+        if (!out) return null;
+        return {
+          outputFile,
+          bytes: out.bytes || 0,
+          entryPoint:
+            out.entryPoint || inferEntryForOutput(metafile, outputFile) || "",
+          isEntry: Boolean(out.entryPoint),
+          includedInputs: Object.keys(out.inputs || {}),
+        };
+      })
+      .filter((chunk): chunk is InitialChunkSummary => Boolean(chunk))
+      .sort((a, b) => b.bytes - a.bytes); // Sort by size (largest first)
+  }, [initialSummary, metafile]);
 
   React.useEffect(() => {
     metafileStorage.loadMetafile().then((storedData) => {
@@ -287,15 +341,29 @@ export default function ResultsPage() {
             return;
           }
 
-          // Classify chunks from the initial chunk's imports
-          const classified = classifyChunksFromInitial(mf, pickedInitial);
+          // Get initial/lazy summary using the tested logic
+          const summary = summarizeInitial(mf, pickedInitial);
+          setInitialSummary(summary);
 
-          // Combine all chunks (initial, eager, and lazy) for the main chunks list
-          const allChunks = [
-            classified.initial,
-            ...classified.eager,
-            ...classified.lazy,
-          ].filter((chunk): chunk is EagerChunkSummary => Boolean(chunk));
+          // Convert output filenames to InitialChunkSummary objects
+          const allChunks: InitialChunkSummary[] = [
+            ...summary.initial.outputs,
+            ...summary.lazy.outputs,
+          ]
+            .map((outputFile) => {
+              const out = mf.outputs[outputFile];
+              if (!out) return null;
+              return {
+                outputFile,
+                bytes: out.bytes || 0,
+                entryPoint:
+                  out.entryPoint || inferEntryForOutput(mf, outputFile) || "",
+                isEntry: Boolean(out.entryPoint),
+                includedInputs: Object.keys(out.inputs || {}),
+              };
+            })
+            .filter((chunk): chunk is InitialChunkSummary => Boolean(chunk))
+            .sort((a, b) => b.bytes - a.bytes); // Sort by size (largest first)
 
           // Select the first chunk from the classified list, or the initial chunk if empty
           let initialSelected = allChunks[0] || null;
@@ -312,7 +380,6 @@ export default function ResultsPage() {
           }
 
           setMetafile(mf);
-          setClassifiedChunks(classified);
           setChunks(allChunks);
           setSelectedChunk(initialSelected);
 
@@ -372,7 +439,7 @@ export default function ResultsPage() {
 
     // Always calculate inclusion path when a module is selected
     const rootEntry =
-      classifiedChunks?.initial?.entryPoint ||
+      initialChunk?.entryPoint ||
       (chunkContainingModule || selectedChunk)?.entryPoint;
     if (metafile && rootEntry) {
       const res = findInclusionPath(metafile, rootEntry, mod);
@@ -400,17 +467,13 @@ export default function ResultsPage() {
 
   // Helper to determine chunk load type
   const getChunkLoadType = React.useCallback(
-    (chunk: EagerChunkSummary): "initial" | "eager" | "lazy" => {
-      if (!classifiedChunks) return "eager";
-      if (classifiedChunks.initial?.outputFile === chunk.outputFile)
-        return "initial";
-      return classifiedChunks.eager.some(
-        (c) => c.outputFile === chunk.outputFile
-      )
-        ? "eager"
+    (chunk: InitialChunkSummary): "initial" | "lazy" => {
+      if (!initialSummary) return "initial";
+      return initialSummary.initial.outputs.includes(chunk.outputFile)
+        ? "initial"
         : "lazy";
     },
-    [classifiedChunks]
+    [initialSummary]
   );
 
   // Filter chunks based on search term and chunk type
@@ -434,45 +497,33 @@ export default function ResultsPage() {
   );
 
   // Helper to get icon and tooltip for chunk type
-  const getChunkTypeIcon = React.useCallback(
-    (loadType: "initial" | "eager" | "lazy") => {
-      switch (loadType) {
-        case "initial":
-          return {
-            icon: Star,
-            tooltip: "Initial chunk - your main entry point that loads first",
-            color: "bg-yellow-500",
-          };
-        case "eager":
-          return {
-            icon: Zap,
-            tooltip: "Eager chunk - loaded immediately with the initial bundle",
-            color: "bg-red-500",
-          };
-        case "lazy":
-          return {
-            icon: Clock,
-            tooltip: "Lazy chunk - loaded on-demand when needed",
-            color: "bg-purple-500",
-          };
-      }
-    },
-    []
-  );
+  const getChunkTypeIcon = React.useCallback((loadType: "initial" | "lazy") => {
+    switch (loadType) {
+      case "initial":
+        return {
+          icon: Zap,
+          color: "bg-red-500",
+        };
+      case "lazy":
+        return {
+          icon: Clock,
+          color: "bg-purple-500",
+        };
+    }
+  }, []);
 
   // Components for better organization and performance
   const ChunkItem = React.memo<{
-    chunk: EagerChunkSummary;
-    loadType: "initial" | "eager" | "lazy";
-    getChunkTypeIcon: (loadType: "initial" | "eager" | "lazy") => {
+    chunk: InitialChunkSummary;
+    loadType: "initial" | "lazy";
+    getChunkTypeIcon: (loadType: "initial" | "lazy") => {
       icon: React.ComponentType<{ size?: number }>;
-      tooltip: string;
       color: string;
     };
     onClick: () => void;
     isSelected: boolean;
   }>(({ chunk, loadType, getChunkTypeIcon, onClick, isSelected }) => {
-    const { icon: IconComponent, tooltip, color } = getChunkTypeIcon(loadType);
+    const { icon: IconComponent, color } = getChunkTypeIcon(loadType);
 
     return (
       <button
@@ -484,6 +535,11 @@ export default function ResultsPage() {
         }`}
       >
         <div className="flex items-center gap-2">
+          <div className={`p-1 rounded ${color} flex-shrink-0`}>
+            <div className="w-2.5 h-2.5 text-white flex items-center justify-center">
+              <IconComponent size={10} />
+            </div>
+          </div>
           <div className="min-w-0 flex-1">
             <div
               className={`truncate text-sm ${isSelected ? "text-primary" : ""}`}
@@ -498,121 +554,11 @@ export default function ResultsPage() {
           >
             {formatBytes(chunk.bytes)}
           </Badge>
-          <TooltipProvider delayDuration={300}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className={`p-1 rounded ${color} flex-shrink-0`}>
-                  <div className="w-2.5 h-2.5 text-white flex items-center justify-center">
-                    <IconComponent size={10} />
-                  </div>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{tooltip}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
         </div>
       </button>
     );
   });
   ChunkItem.displayName = "ChunkItem";
-
-  const ImportItem = React.memo<{
-    dep: ReverseDependency;
-    canOpen: boolean;
-    isSourceOnly?: boolean;
-    isLazy?: boolean;
-    onClick?: () => void;
-  }>(({ dep, canOpen, isSourceOnly, isLazy, onClick }) => {
-    return (
-      <div className="w-full text-left text-xs break-all bg-muted/50 hover:bg-muted px-2 py-1 rounded transition-colors group">
-        <div className="flex items-center gap-2">
-          <TooltipProvider delayDuration={300}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div
-                  className={`p-1 rounded flex-shrink-0 ${
-                    isLazy ? "bg-purple-500" : "bg-red-500"
-                  }`}
-                >
-                  <div className="w-2.5 h-2.5 text-white flex items-center justify-center">
-                    {isLazy ? <Clock size={10} /> : <Zap size={10} />}
-                  </div>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>
-                  {isLazy
-                    ? "Lazy import - loaded on-demand when needed"
-                    : "Eager import - loaded immediately with the module"}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <div className="flex-1 min-w-0">
-            <div className="font-medium truncate" title={dep.importer}>
-              {dep.importer}
-            </div>
-            <div className="flex items-center gap-2 text-muted-foreground">
-              {dep.external && <span className="text-xs">(external)</span>}
-              {isSourceOnly && <span className="text-xs">(source only)</span>}
-              {dep.original && dep.original !== dep.importer && (
-                <span className="text-xs font-mono bg-muted px-1 rounded">
-                  {dep.original}
-                </span>
-              )}
-              <span className="text-xs capitalize">
-                {dep.kind.replace("-", " ")}
-              </span>
-            </div>
-          </div>
-          {canOpen ? (
-            <TooltipProvider delayDuration={700}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={onClick}
-                    className="flex-shrink-0 p-1 rounded hover:bg-muted-foreground/20 transition-colors cursor-pointer"
-                  >
-                    {isSourceOnly ? (
-                      <FileText size={12} className="text-muted-foreground" />
-                    ) : (
-                      <ArrowRight size={12} className="text-muted-foreground" />
-                    )}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>
-                    {isSourceOnly
-                      ? "Navigate to source file (optimized out of bundle)"
-                      : "Navigate to this file in the bundle"}
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          ) : (
-            <TooltipProvider delayDuration={700}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex-shrink-0 p-1 rounded bg-muted-foreground/20">
-                    <ArrowRight
-                      size={12}
-                      className="text-muted-foreground/50"
-                    />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>File not found in bundle or metafile</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-        </div>
-      </div>
-    );
-  });
-  ImportItem.displayName = "ImportItem";
 
   const InclusionPathItem = React.memo<{
     step: InclusionPathStep;
@@ -630,10 +576,10 @@ export default function ResultsPage() {
   });
   InclusionPathItem.displayName = "InclusionPathItem";
 
-  // Component for bundle stats (used for both eager and lazy sections)
+  // Component for bundle stats (used for both initial and lazy sections)
   const BundleStatsSection = React.memo<{
     title: string;
-    chunks: EagerChunkSummary[];
+    chunks: InitialChunkSummary[];
     onClick?: () => void;
     bgColor: string;
     hoverColor: string;
@@ -641,6 +587,7 @@ export default function ResultsPage() {
     textColor: string;
     iconBgColor: string;
     icon: React.ReactNode;
+    description?: string;
   }>(
     ({
       title,
@@ -652,6 +599,7 @@ export default function ResultsPage() {
       textColor,
       iconBgColor,
       icon,
+      description,
     }) => {
       const totalSize = chunks.reduce(
         (total, chunk) => total + (chunk?.bytes || 0),
@@ -685,6 +633,11 @@ export default function ResultsPage() {
                 {formatBytes(totalSize)}
               </div>
             </div>
+            {description && (
+              <p className="text-xs text-muted-foreground mb-3 italic">
+                {description}
+              </p>
+            )}
             <div className="text-xs text-muted-foreground space-y-2">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-1">
@@ -972,18 +925,32 @@ export default function ResultsPage() {
         return;
       }
 
-      // Classify chunks from the initial chunk's imports
-      const classified = classifyChunksFromInitial(meta, pickedInitial);
+      // Get initial/lazy summary using the tested logic
+      const summary = summarizeInitial(meta, pickedInitial);
+      setInitialSummary(summary);
 
-      // Combine all chunks (initial, eager, and lazy) for the main chunks list
-      const allChunks = [
-        classified.initial,
-        ...classified.eager,
-        ...classified.lazy,
-      ].filter((chunk): chunk is EagerChunkSummary => Boolean(chunk));
+      // Convert output filenames to InitialChunkSummary objects
+      const allChunks: InitialChunkSummary[] = [
+        ...summary.initial.outputs,
+        ...summary.lazy.outputs,
+      ]
+        .map((outputFile) => {
+          const out = meta.outputs[outputFile];
+          if (!out) return null;
+          return {
+            outputFile,
+            bytes: out.bytes || 0,
+            entryPoint:
+              out.entryPoint || inferEntryForOutput(meta, outputFile) || "",
+            isEntry: Boolean(out.entryPoint),
+            includedInputs: Object.keys(out.inputs || {}),
+          };
+        })
+        .filter((chunk): chunk is InitialChunkSummary => Boolean(chunk))
+        .sort((a, b) => b.bytes - a.bytes); // Sort by size (largest first)
 
       // Select the first chunk from the classified list, or the initial chunk if empty
-      let initialSelected: EagerChunkSummary | null = null;
+      let initialSelected: InitialChunkSummary | null = null;
       if (allChunks.length > 0 && allChunks[0]) {
         initialSelected = allChunks[0];
       } else if (pickedInitial) {
@@ -999,9 +966,10 @@ export default function ResultsPage() {
       }
 
       setMetafile(meta);
-      setClassifiedChunks(classified);
       setChunks(
-        allChunks.filter((chunk): chunk is EagerChunkSummary => Boolean(chunk))
+        allChunks.filter((chunk): chunk is InitialChunkSummary =>
+          Boolean(chunk)
+        )
       );
       setSelectedChunk(initialSelected);
 
@@ -1080,16 +1048,17 @@ export default function ResultsPage() {
                 </div>
               </CardHeader>
               <CardContent className="flex flex-col h-full px-3 py-2 overflow-hidden">
-                {/* Eager Code Section */}
+                {/* Initial Code Section */}
                 <BundleStatsSection
-                  title="Eager"
-                  chunks={eagerChunks}
-                  bgColor="bg-rose-50"
+                  title="Initial"
+                  chunks={initialChunks}
+                  bgColor="bg-red-50"
                   hoverColor=""
-                  borderColor="border-rose-200"
-                  textColor="text-rose-700"
+                  borderColor="border-red-200"
+                  textColor="text-red-700"
                   iconBgColor="bg-red-500"
                   icon={<Zap size={10} />}
+                  description="Code loaded immediately on page load"
                 />
 
                 {/* Lazy Code Section */}
@@ -1102,6 +1071,7 @@ export default function ResultsPage() {
                   textColor="text-purple-700"
                   iconBgColor="bg-purple-500"
                   icon={<Clock size={10} />}
+                  description="Code loaded on-demand when needed"
                 />
 
                 {/* Search input with filter button */}
@@ -1163,24 +1133,8 @@ export default function ResultsPage() {
                                 }
                                 className="rounded border-border"
                               />
-                              <Star size={14} className="text-yellow-500" />
-                              <span className="text-xs">Initial</span>
-                            </label>
-
-                            <label className="flex items-center space-x-2 cursor-pointer hover:bg-muted/50 px-2 py-1 rounded">
-                              <input
-                                type="checkbox"
-                                checked={chunkTypeFilters.eager}
-                                onChange={() =>
-                                  setChunkTypeFilters((prev) => ({
-                                    ...prev,
-                                    eager: !prev.eager,
-                                  }))
-                                }
-                                className="rounded border-border"
-                              />
                               <Zap size={14} className="text-red-500" />
-                              <span className="text-xs">Eager</span>
+                              <span className="text-xs">Initial</span>
                             </label>
 
                             <label className="flex items-center space-x-2 cursor-pointer hover:bg-muted/50 px-2 py-1 rounded">
@@ -1195,10 +1149,7 @@ export default function ResultsPage() {
                                 }
                                 className="rounded border-border"
                               />
-                              <Hourglass
-                                size={14}
-                                className="text-purple-500"
-                              />
+                              <Clock size={14} className="text-purple-500" />
                               <span className="text-xs">Lazy</span>
                             </label>
                           </div>
@@ -1245,8 +1196,7 @@ export default function ResultsPage() {
                             setSelectedModule(null);
                             // Still calculate inclusion path even if no entry point
                             const rootEntry =
-                              classifiedChunks?.initial?.entryPoint ||
-                              c.entryPoint;
+                              initialChunk?.entryPoint || c.entryPoint;
                             if (metafile && rootEntry) {
                               // Find a suitable module in this chunk to show inclusion path for
                               const firstModule = c.includedInputs[0];
@@ -1500,258 +1450,29 @@ export default function ResultsPage() {
                     included in your app.
                   </p>
                 ) : (
-                  <div className="space-y-2">
-                    {(() => {
-                      const moduleDetails = getModuleDetails(
-                        metafile,
-                        selectedModule
-                      );
-
-                      return (
-                        <>
-                          <div className="text-xs text-muted-foreground">
-                            Chunk: {selectedChunk?.outputFile || "Unknown"}
-                          </div>
-                          {moduleDetails && (
-                            <>
-                              <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                <span>
-                                  Type:{" "}
-                                  {moduleDetails.format?.toUpperCase() ||
-                                    "Unknown"}
-                                </span>
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <HelpCircle
-                                        size={10}
-                                        className="text-muted-foreground hover:text-foreground cursor-help"
-                                      />
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>
-                                        The module format (ESM, CommonJS, etc.)
-                                        used by this file
-                                      </p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              </div>
-                              {moduleDetails.bytes && (
-                                <div className="text-xs text-muted-foreground">
-                                  Size: {formatBytes(moduleDetails.bytes)}
-                                </div>
-                              )}
-                              {moduleDetails.importsCount !== undefined && (
-                                <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                  <span>
-                                    Imports: {moduleDetails.importsCount}{" "}
-                                    modules
-                                  </span>
-                                  <TooltipProvider>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <HelpCircle
-                                          size={10}
-                                          className="text-muted-foreground hover:text-foreground cursor-help"
-                                        />
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p>
-                                          Number of modules this file imports
-                                          directly
-                                        </p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                </div>
-                              )}
-                            </>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </div>
+                  <div className="space-y-2"></div>
                 )}
-
-                {/* Imported by Section */}
-                {(() => {
-                  const reverseDeps = selectedModule
-                    ? findReverseDependencies(metafile, selectedModule)
-                    : [];
-
-                  if (reverseDeps.length > 0) {
-                    return (
-                      <div className="space-y-2">
-                        <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                          <span>Imported by ({reverseDeps.length})</span>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <HelpCircle
-                                  size={12}
-                                  className="text-muted-foreground hover:text-foreground cursor-help"
-                                />
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Files that directly import this module</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </h4>
-                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                          {reverseDeps
-                            .sort((a, b) => {
-                              const aIsLazy = a.kind === "dynamic-import";
-                              const bIsLazy = b.kind === "dynamic-import";
-                              if (aIsLazy && !bIsLazy) return 1; // lazy comes after eager
-                              if (!aIsLazy && bIsLazy) return -1; // eager comes before lazy
-                              return 0; // same type, maintain original order
-                            })
-                            .map((dep, idx) => {
-                              const isLazy = dep.kind === "dynamic-import";
-                              const chunkContainingFile = chunks.find((chunk) =>
-                                chunk.includedInputs.includes(dep.importer)
-                              );
-                              const fileExistsInMetafile = Boolean(
-                                metafile?.inputs[dep.importer]
-                              );
-                              // Allow navigation if file exists in metafile, even if not in a chunk (e.g., barrel files)
-                              const canOpen =
-                                Boolean(chunkContainingFile) ||
-                                fileExistsInMetafile;
-                              const isSourceOnly =
-                                fileExistsInMetafile && !chunkContainingFile;
-                              return (
-                                <ImportItem
-                                  key={idx}
-                                  dep={dep}
-                                  canOpen={canOpen}
-                                  isSourceOnly={isSourceOnly}
-                                  isLazy={isLazy}
-                                  onClick={
-                                    canOpen
-                                      ? () =>
-                                          navigateToModule(
-                                            dep.importer,
-                                            chunkContainingFile || undefined
-                                          )
-                                      : undefined
-                                  }
-                                />
-                              );
-                            })}
-                        </div>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-
-                {(() => {
-                  const res = inclusion;
-                  if (!res) return null;
-                  if (!res.found) {
-                    return (
-                      <p className="text-sm space-y-2 text-muted-foreground">
-                        No inclusion path found (may be inlined or tree-shaken
-                        path not represented).
-                      </p>
-                    );
-                  }
-
-                  return null;
-                })()}
-
-                {/* Imports Section */}
-                {(() => {
-                  const imports = selectedModule
-                    ? getModuleImports(metafile, selectedModule)
-                    : null;
-                  if (imports && imports.length > 0) {
-                    return (
-                      <div className="space-y-2">
-                        <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                          <span>Imports ({imports.length})</span>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <HelpCircle
-                                  size={12}
-                                  className="text-muted-foreground hover:text-foreground cursor-help"
-                                />
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Modules that this file imports directly</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </h4>
-                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                          {imports.map((importedModule, idx) => {
-                            const chunkContainingFile = chunks.find((chunk) =>
-                              chunk.includedInputs.includes(importedModule)
-                            );
-                            const canOpen = Boolean(chunkContainingFile);
-                            return (
-                              <div
-                                key={idx}
-                                className="w-full text-left text-xs break-all bg-muted/50 hover:bg-muted px-2 py-1 rounded transition-colors group"
-                              >
-                                <div className="flex items-center gap-2">
-                                  <div className="flex-1 min-w-0">
-                                    <div
-                                      className="font-medium truncate"
-                                      title={importedModule}
-                                    >
-                                      {importedModule}
-                                    </div>
-                                  </div>
-                                  {canOpen && (
-                                    <button
-                                      onClick={() =>
-                                        navigateToModule(
-                                          importedModule,
-                                          chunkContainingFile!
-                                        )
-                                      }
-                                      className="flex-shrink-0 p-1 rounded hover:bg-muted-foreground/20 transition-colors cursor-pointer"
-                                      title="Open this module"
-                                    >
-                                      <ArrowRight
-                                        size={12}
-                                        className="text-muted-foreground"
-                                      />
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
 
                 {/* Inclusion Path Section */}
                 {(() => {
-                  const res = inclusion;
-                  if (!res) return null;
-                  if (!res.found) {
-                    return (
-                      <p className="text-sm text-muted-foreground">
-                        No inclusion path found (may be inlined or tree-shaken
-                        path not represented).
-                      </p>
-                    );
+                  // Use the new getInclusionPath function to get import statements
+                  const inclusionPath = selectedModule
+                    ? getInclusionPath(metafile, selectedModule, chunks)
+                    : [];
+
+                  if (inclusionPath.length === 0) {
+                    return null;
                   }
                   // Check if this module is the entry point of the MAIN APPLICATION bundle
                   const isMainEntryPoint =
                     selectedModule === initialChunk?.entryPoint;
 
-                  if (isMainEntryPoint && res.path.length === 0) {
+                  // Check if this module is the entry point of its own chunk (but not the main app entry)
+                  const isChunkEntryPoint =
+                    selectedModule === selectedChunk?.entryPoint;
+
+                  // Show special messages for entry points that have no inclusion path
+                  if (isMainEntryPoint && inclusionPath.length === 0) {
                     // This is the actual main application entry point
                     return (
                       <div className="space-y-2">
@@ -1759,9 +1480,9 @@ export default function ResultsPage() {
                           <TooltipProvider delayDuration={300}>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <div className="p-1 rounded bg-yellow-500">
+                                <div className="p-1 rounded bg-red-500">
                                   <div className="w-4 h-4 text-white flex items-center justify-center">
-                                    <Star size={14} />
+                                    <Zap size={14} />
                                   </div>
                                 </div>
                               </TooltipTrigger>
@@ -1785,16 +1506,12 @@ export default function ResultsPage() {
                     );
                   }
 
-                  // Check if this module is the entry point of its own chunk (but not the main app entry)
-                  const isChunkEntryPoint =
-                    selectedModule === selectedChunk?.entryPoint;
-
                   if (
                     isChunkEntryPoint &&
-                    res.path.length === 0 &&
+                    inclusionPath.length === 0 &&
                     !isMainEntryPoint
                   ) {
-                    // This is the entry point of a chunk (could be lazy or eager)
+                    // This is the entry point of a chunk (could be lazy or initial)
                     const chunkType = getChunkLoadType(selectedChunk!);
                     const { icon: IconComponent, color } =
                       getChunkTypeIcon(chunkType);
@@ -1833,7 +1550,7 @@ export default function ResultsPage() {
                         </div>
                         <p className="text-sm text-muted-foreground">
                           This file is the starting point of its{" "}
-                          {chunkType === "lazy" ? "lazy" : "eager"} chunk and
+                          {chunkType === "lazy" ? "lazy" : "initial"} chunk and
                           has no dependencies above it within this chunk.
                         </p>
                       </div>
@@ -1858,22 +1575,198 @@ export default function ResultsPage() {
                           </Tooltip>
                         </TooltipProvider>
                       </h4>
-                      {(() => {
-                        const rootEntryDisplay =
-                          classifiedChunks?.initial?.entryPoint ||
-                          selectedChunk?.entryPoint ||
-                          "Unknown";
-                        return (
-                          <ol className="text-sm space-y-3">
-                            <li className="break-all">{rootEntryDisplay}</li>
-                            {res.path.map((s, idx) => (
-                              <InclusionPathItem key={idx} step={s} />
-                            ))}
-                          </ol>
-                        );
-                      })()}
+                      <div className="space-y-2">
+                        {inclusionPath.map((step, idx) => {
+                          // Find which chunk this file belongs to
+                          const chunkContainingFile = chunks.find((chunk) =>
+                            chunk.includedInputs.includes(step.file)
+                          );
+
+                          return (
+                            <div
+                              key={idx}
+                              className="flex items-start gap-2 p-1.5 rounded-md bg-muted/20"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className="break-all">
+                                  <span
+                                    className="text-xs font-medium truncate block"
+                                    title={step.file}
+                                  >
+                                    {step.file}
+                                  </span>
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    {step.importerChunkType === "lazy" && (
+                                      <span className="text-xs text-purple-600 font-medium">
+                                        lazy
+                                      </span>
+                                    )}
+                                    {step.isDynamicImport ? (
+                                      <span className="text-xs text-purple-600 mr-1">
+                                        lazily imports
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">
+                                        imports
+                                      </span>
+                                    )}
+                                    <code
+                                      className="text-xs bg-muted px-1 py-0.5 rounded font-mono truncate flex-1"
+                                      title={step.importStatement}
+                                    >
+                                      {step.importStatement}
+                                    </code>
+                                  </div>
+                                  {step.isDynamicImport && (
+                                    <div className="text-xs text-purple-600 mt-0.5">
+                                      ⚡ Creates lazy-loaded module
+                                    </div>
+                                  )}
+                                </div>
+                                {chunkContainingFile && (
+                                  <div
+                                    className="text-xs text-muted-foreground mt-0.5 truncate"
+                                    title={`${
+                                      chunkContainingFile.outputFile
+                                    } (${formatBytes(
+                                      chunkContainingFile.bytes
+                                    )})`}
+                                  >
+                                    {chunkContainingFile.outputFile} (
+                                    {formatBytes(chunkContainingFile.bytes)})
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
+                })()}
+
+                {/* Imported by Section */}
+                {(() => {
+                  const importSources = selectedModule
+                    ? getImportSources(
+                        metafile,
+                        selectedModule,
+                        chunks,
+                        initialSummary?.initial.outputs || []
+                      )
+                    : [];
+
+                  if (importSources.length > 0) {
+                    return (
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                          <span>Imported by ({importSources.length})</span>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <HelpCircle
+                                  size={12}
+                                  className="text-muted-foreground hover:text-foreground cursor-help"
+                                />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>
+                                  Files that directly import this module and
+                                  their loading type
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </h4>
+                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                          {importSources.map((source, idx) => {
+                            const chunkContainingFile = chunks.find((chunk) =>
+                              chunk.includedInputs.includes(source.importer)
+                            );
+                            const fileExistsInMetafile = Boolean(
+                              metafile?.inputs[source.importer]
+                            );
+                            // Allow navigation if file exists in metafile, even if not in a chunk (e.g., barrel files)
+                            const canOpen =
+                              Boolean(chunkContainingFile) ||
+                              fileExistsInMetafile;
+                            const isSourceOnly =
+                              fileExistsInMetafile && !chunkContainingFile;
+
+                            const { icon: IconComponent, color } =
+                              getChunkTypeIcon(source.chunkType);
+
+                            return (
+                              <div
+                                key={idx}
+                                className="flex items-start gap-2 p-2 rounded-md border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
+                                onClick={
+                                  canOpen
+                                    ? () =>
+                                        navigateToModule(
+                                          source.importer,
+                                          chunkContainingFile || undefined
+                                        )
+                                    : undefined
+                                }
+                              >
+                                <div className="flex-shrink-0 mt-0.5">
+                                  <div
+                                    className={`w-3 h-3 rounded-full ${color} flex items-center justify-center`}
+                                  >
+                                    <IconComponent
+                                      size={10}
+                                      className="text-white"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span
+                                      className="text-xs font-medium truncate"
+                                      title={source.importer}
+                                    >
+                                      {source.importer}
+                                    </span>
+                                    {source.chunkType === "lazy" && (
+                                      <span className="text-xs text-purple-600 font-medium">
+                                        lazy
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1 mb-1">
+                                    {source.isDynamicImport ? (
+                                      <span className="text-xs text-purple-600 mr-1">
+                                        lazily imports
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">
+                                        imports
+                                      </span>
+                                    )}
+                                    <code
+                                      className="text-xs bg-muted px-1 py-0.5 rounded font-mono truncate flex-1"
+                                      title={source.importStatement}
+                                    >
+                                      {source.importStatement}
+                                    </code>
+                                  </div>
+                                  {source.chunkOutputFile &&
+                                    source.chunkSize && (
+                                      <div className="text-xs text-muted-foreground">
+                                        {source.chunkOutputFile} (
+                                        {formatBytes(source.chunkSize)})
+                                      </div>
+                                    )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
                 })()}
               </CardContent>
             </Card>
