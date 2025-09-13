@@ -255,6 +255,23 @@ export default function ResultsPage() {
     );
   }, [classifiedChunks]);
 
+  // Separate eager and lazy chunks for the new UI sections
+  const eagerChunks = React.useMemo(() => {
+    if (!classifiedChunks) return [];
+    return [classifiedChunks.initial, ...classifiedChunks.eager].filter(
+      (chunk): chunk is EagerChunkSummary => Boolean(chunk)
+    );
+  }, [classifiedChunks]);
+
+  const lazyChunks = React.useMemo(() => {
+    if (!classifiedChunks) return [];
+    return (
+      classifiedChunks.lazy.filter((chunk): chunk is EagerChunkSummary =>
+        Boolean(chunk)
+      ) || []
+    );
+  }, [classifiedChunks]);
+
   React.useEffect(() => {
     metafileStorage.loadMetafile().then((storedData) => {
       if (storedData) {
@@ -613,6 +630,120 @@ export default function ResultsPage() {
   });
   InclusionPathItem.displayName = "InclusionPathItem";
 
+  // Component for bundle stats (used for both eager and lazy sections)
+  const BundleStatsSection = React.memo<{
+    title: string;
+    chunks: EagerChunkSummary[];
+    onClick?: () => void;
+    bgColor: string;
+    hoverColor: string;
+    borderColor: string;
+    textColor: string;
+    iconBgColor: string;
+    icon: React.ReactNode;
+  }>(
+    ({
+      title,
+      chunks,
+      onClick,
+      bgColor,
+      hoverColor,
+      borderColor,
+      textColor,
+      iconBgColor,
+      icon,
+    }) => {
+      const totalSize = chunks.reduce(
+        (total, chunk) => total + (chunk?.bytes || 0),
+        0
+      );
+      const largestChunk =
+        chunks.length > 0 ? Math.max(...chunks.map((c) => c?.bytes || 0)) : 0;
+      const totalModules = chunks.reduce(
+        (total, chunk) => total + (chunk?.includedInputs?.length || 0),
+        0
+      );
+
+      return (
+        <div
+          className={`w-full mb-3 p-3 ${bgColor} ${borderColor} rounded-md ${hoverColor} transition-colors ${
+            onClick ? "cursor-pointer" : ""
+          }`}
+          onClick={onClick}
+        >
+          <TooltipProvider>
+            <div className="flex items-center justify-between mb-3">
+              <div className={`text-sm font-medium flex items-center gap-2`}>
+                <div className={`p-1 rounded ${iconBgColor}`}>
+                  <div className="w-3.5 h-3.5 text-white flex items-center justify-center">
+                    {icon}
+                  </div>
+                </div>
+                {title}
+              </div>
+              <div className={`text-base font-semibold ${textColor}`}>
+                {formatBytes(totalSize)}
+              </div>
+            </div>
+            <div className="text-xs text-muted-foreground space-y-2">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-1">
+                  <span>Chunks:</span>
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <HelpCircle className="w-3 h-3 text-muted-foreground hover:text-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Number of {title.toLowerCase()} output files.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <span>{chunks.length}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-1">
+                  <span>Largest chunk:</span>
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <HelpCircle className="w-3 h-3 text-muted-foreground hover:text-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>
+                        The biggest {title.toLowerCase()} chunk that could
+                        impact loading performance.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <span>
+                  {chunks.length > 0 ? formatBytes(largestChunk) : "0 B"}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-1">
+                  <span>Total modules:</span>
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <HelpCircle className="w-3 h-3 text-muted-foreground hover:text-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>
+                        Source files/modules bundled into {title.toLowerCase()}{" "}
+                        chunks.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <span>{totalModules}</span>
+              </div>
+            </div>
+          </TooltipProvider>
+        </div>
+      );
+    }
+  );
+  BundleStatsSection.displayName = "BundleStatsSection";
+
   // Find all highlighted elements in the chunk contents
   // removed unused findHighlightedElements helper
 
@@ -949,173 +1080,29 @@ export default function ResultsPage() {
                 </div>
               </CardHeader>
               <CardContent className="flex flex-col h-full px-3 py-2 overflow-hidden">
-                <div
-                  className="w-full mb-3 p-3 bg-primary/10 border border-primary/20 rounded-md hover:bg-primary/20 transition-colors cursor-pointer"
-                  onClick={() => {
-                    // Select the picked initial chunk (fallbacks handled)
-                    if (initialChunk) {
-                      setSelectedChunk(initialChunk);
+                {/* Eager Code Section */}
+                <BundleStatsSection
+                  title="Eager"
+                  chunks={eagerChunks}
+                  bgColor="bg-rose-50"
+                  hoverColor=""
+                  borderColor="border-rose-200"
+                  textColor="text-rose-700"
+                  iconBgColor="bg-red-500"
+                  icon={<Zap size={10} />}
+                />
 
-                      // Only select the entry point if it's actually included in this chunk
-                      const entryPointInChunk =
-                        initialChunk.entryPoint &&
-                        initialChunk.includedInputs.includes(
-                          initialChunk.entryPoint
-                        );
-                      setSelectedModule(
-                        entryPointInChunk ? initialChunk.entryPoint : null
-                      );
-
-                      // Calculate inclusion path for the entry point
-                      if (
-                        metafile &&
-                        initialChunk.entryPoint &&
-                        entryPointInChunk
-                      ) {
-                        const rootEntry =
-                          classifiedChunks?.initial?.entryPoint ||
-                          initialChunk.entryPoint;
-                        const res = findInclusionPath(
-                          metafile,
-                          rootEntry,
-                          initialChunk.entryPoint
-                        );
-                        setInclusion(res);
-                      } else {
-                        setInclusion(null);
-                      }
-
-                      // Scroll the entry point file into view if it was selected
-                      if (entryPointInChunk) {
-                        setTimeout(() => {
-                          const selectedElement = document.querySelector(
-                            '[data-selected-module="true"]'
-                          );
-                          if (selectedElement) {
-                            selectedElement.scrollIntoView({
-                              behavior: "instant",
-                              block: "center",
-                            });
-                          }
-                        }, 50);
-                      }
-                    }
-                  }}
-                >
-                  <TooltipProvider>
-                    {metafileName && (
-                      <div className="text-sm font-medium text-muted-foreground mb-2">
-                        {metafileName}
-                      </div>
-                    )}
-                    <div className="text-xs text-primary mb-2">
-                      Initial Bundle
-                    </div>
-                    <div className="text-sm font-medium mb-3 flex items-center gap-2">
-                      <span className="truncate">
-                        {initialChunk?.outputFile || "No entry found"}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        (
-                        {initialChunk ? formatBytes(initialChunk.bytes) : "0 B"}
-                        )
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground space-y-2">
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-1">
-                          <span>Total size:</span>
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <HelpCircle className="w-3 h-3 text-muted-foreground hover:text-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>
-                                Combined size of chunks loaded immediately
-                                (eager chunks + initial chunk).
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
-                        <span className="font-medium text-primary">
-                          {formatBytes(
-                            initialBundleChunks.reduce(
-                              (total, chunk) => total + (chunk?.bytes || 0),
-                              0
-                            )
-                          )}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-1">
-                          <span>Chunks:</span>
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <HelpCircle className="w-3 h-3 text-muted-foreground hover:text-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>
-                                Output files loaded immediately on initial page
-                                load (eager chunks + initial chunk).
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
-                        <span>{initialBundleChunks.length}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-1">
-                          <span>Largest chunk:</span>
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <HelpCircle className="w-3 h-3 text-muted-foreground hover:text-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>
-                                The biggest chunk loaded on initial page load
-                                that could impact loading performance.
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
-                        <span>
-                          {initialBundleChunks.length > 0
-                            ? formatBytes(
-                                Math.max(
-                                  ...initialBundleChunks.map(
-                                    (c) => c?.bytes || 0
-                                  )
-                                )
-                              )
-                            : "0 B"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-1">
-                          <span>Total modules:</span>
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <HelpCircle className="w-3 h-3 text-muted-foreground hover:text-foreground" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>
-                                Source files/modules bundled into chunks loaded
-                                immediately (eager chunks + initial chunk).
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
-                        <span>
-                          {initialBundleChunks.reduce(
-                            (total, chunk) =>
-                              total + (chunk?.includedInputs?.length || 0),
-                            0
-                          )}
-                        </span>
-                      </div>
-                    </div>
-                  </TooltipProvider>
-                </div>
+                {/* Lazy Code Section */}
+                <BundleStatsSection
+                  title="Lazy"
+                  chunks={lazyChunks}
+                  bgColor="bg-purple-50"
+                  hoverColor=""
+                  borderColor="border-purple-200"
+                  textColor="text-purple-700"
+                  iconBgColor="bg-purple-500"
+                  icon={<Clock size={10} />}
+                />
 
                 {/* Search input with filter button */}
                 <div className="flex-shrink-0 mb-3">
