@@ -20,12 +20,13 @@ export const metadata: Metadata = {
   },
   description: "Visualize and explore your esbuild metafile outputs.",
   icons: [{ rel: "icon", url: "/favicon.ico" }],
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    viewportFit: "cover",
-  },
   metadataBase: new URL("https://esbuildradar.com"),
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

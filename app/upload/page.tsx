@@ -96,6 +96,11 @@ export default function UploadPage() {
           <p className="text-sm text-muted-foreground text-center">
             Upload your stats.json file or try our demo
           </p>
+          <div className="text-xs text-amber-600 dark:text-amber-400 text-center bg-amber-50 dark:bg-amber-950/50 rounded-md p-2 border border-amber-200 dark:border-amber-800">
+            <strong>⚠️ Development Notice:</strong> This tool is in active
+            development and has only been tested with bundles from Angular
+            builds so far. Results with other frameworks may vary.
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">

@@ -8,13 +8,33 @@ import type {
   Metafile,
 } from "@/lib/metafile";
 
-/** Returns true for JavaScript outputs we care about for initial/lazy download. */
+/**
+ * Determines whether a given output filename represents a browser-runnable
+ * JavaScript bundle produced by esbuild.
+ *
+ * The analyser intentionally ignores `.mjs` outputs because those are usually
+ * consumed by Node / SSR, whereas we only care about artefacts that a browser
+ * actually downloads ( `.js` and `.cjs` ).
+ *
+ * @param file – Output filename as it appears in the metafile (relative path).
+ * @returns `true` if the file ends with `.js` or `.cjs` (case-insensitive) and
+ *          therefore should be included in browser bundle calculations.
+ */
 export function isJsOutput(file: string): boolean {
-  // Only include .js and .cjs outputs (exclude .mjs)
   return /\.(?:js|cjs)(\?.*)?$/i.test(file);
 }
 
-/** Heuristic to exclude server-only artifacts from the browser analysis. */
+/**
+ * Best-effort check for server-only JavaScript bundles.
+ *
+ * Server artefacts are filtered out so that the UI does not confuse SSR chunks
+ * with code that ships to the browser.  The heuristics follow common
+ * conventions used by both React and Next.js ( e.g. `*.server.js` or `server/`
+ * directories ).
+ *
+ * @param file – Output filename or path.
+ * @returns `true` if the filename suggests the bundle is meant for the server.
+ */
 export function isLikelyServerOutput(file: string): boolean {
   const lower = file.toLowerCase();
   if (/(^|\/)server(\/?|$)/.test(lower)) return true;

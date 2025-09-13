@@ -66,8 +66,18 @@ function classifyInitial(meta: Metafile, initial: string) {
 }
 
 /**
- * Returns the list of output files that are loaded initially and lazily
- * along with their respective summed raw byte sizes.
+ * High-level summary utilised by the UI to split the bundle into *initial* and
+ * *lazy* code paths.
+ *
+ * 1. Picks a representative entry-chunk using `pickInitialOutput` (optionally
+ *    respecting a user-supplied hint).
+ * 2. Traverses its dependency graph (static imports only) to gather every
+ *    output the browser must download on first paint.
+ * 3. Separately collects outputs that are referenced **solely** by
+ *    dynamic-import edges.
+ * 4. Calculates the raw byte size totals for each bucket.
+ *
+ * The result drives the headline figures in both the CLI and web UI.
  */
 export function summarizeInitial(meta: Metafile, preferredInitial?: string) {
   const initialOutput = pickInitialOutput(meta, preferredInitial);

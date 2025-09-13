@@ -50,6 +50,21 @@ export interface InitialChunkSummary {
   includedInputs: string[];
 }
 
+/**
+ * Type-guards and coerces a raw JSON value into a strongly-typed `Metafile`.
+ *
+ * esbuild’s CLI can produce a `--metafile` output that is later read back in
+ * via `JSON.parse`.  This helper performs the minimal structural validation
+ * necessary for the rest of the analyser to work safely, throwing an error when
+ * the shape is missing the required `inputs` or `outputs` properties.
+ *
+ * The function does **not** attempt to do a deep validation of every field—
+ * that is left to higher-level logic.  Its sole responsibility is to protect
+ * against entirely unrelated JSON blobs being passed in by mistake.
+ *
+ * @param json – The value returned from `JSON.parse(...)`.
+ * @throws {Error} If the value is `null`, not an object, or lacks `inputs` / `outputs`.
+ */
 export function parseMetafile(json: unknown): Metafile {
   if (
     !json ||
@@ -74,6 +89,13 @@ function isLikelyServerFile(file: string): boolean {
   return false;
 }
 
+/**
+ * Lists all output files that represent **entry points** (i.e. esbuild bundles
+ * that were created directly from a CLI entry file).
+ *
+ * Only JavaScript artefacts are considered; CSS and other files are ignored to
+ * keep subsequent browser-centric computations simple.
+ */
 export function getEntryOutputs(meta: Metafile): string[] {
   const entries: string[] = [];
   for (const [outputFile, output] of Object.entries(meta.outputs)) {
@@ -84,6 +106,10 @@ export function getEntryOutputs(meta: Metafile): string[] {
   return entries;
 }
 
+/**
+ * Returns the unique list of **input** files that served as entry points when
+ * esbuild produced the bundle.
+ */
 export function getEntryInputs(meta: Metafile): string[] {
   const inputs = new Set<string>();
   for (const out of Object.values(meta.outputs)) {
