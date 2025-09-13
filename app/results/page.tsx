@@ -63,6 +63,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import * as React from "react";
 
 // LocalStorage keys
@@ -81,6 +82,7 @@ const DEFAULT_FILTERS = {
 };
 
 export default function ResultsPage() {
+  const router = useRouter();
   const [metafile, setMetafile] = React.useState<Metafile | null>(null);
   const [chunks, setChunks] = React.useState<EagerChunkSummary[]>([]);
   const [classifiedChunks, setClassifiedChunks] =
@@ -278,9 +280,12 @@ export default function ResultsPage() {
               (err instanceof Error ? err.message : "Unknown error")
           );
         }
+      } else {
+        // No stored metafile found, redirect to upload page
+        router.push("/upload");
       }
     });
-  }, []);
+  }, [router]);
 
   function onSelectModule(mod: string) {
     setSelectedModule(mod);
