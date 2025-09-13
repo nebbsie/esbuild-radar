@@ -14,17 +14,17 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "esbuild-analyser",
-    template: "%s • esbuild-analyser",
+    default: "Esbuild Radar",
+    template: "%s • Esbuild Radar",
   },
-  description: "Visualise and explore your esbuild metafile outputs.",
+  description: "Visualize and explore your esbuild metafile outputs.",
   icons: [{ rel: "icon", url: "/favicon.ico" }],
   viewport: {
     width: "device-width",
     initialScale: 1,
     viewportFit: "cover",
   },
-  metadataBase: new URL("https://esbuild-analyser.vercel.app"),
+  metadataBase: new URL("https://esbuildradar.com"),
 };
 
 export default function RootLayout({
