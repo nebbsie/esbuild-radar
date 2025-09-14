@@ -1,0 +1,7 @@
+{
+  "files.exclude": {
+    "**/.husky": true,
+    "**/.idea": true,
+    "**/.vscode": true
+  }
+}

@@ -1,54 +1,12 @@
-export type ImportKind =
-  | "import-statement"
-  | "dynamic-import"
-  | "require-call"
-  | "require-resolve"
-  | "entry-point"
-  | "internal"
-  | string;
-
-export interface MetafileInputImportEdge {
-  path: string;
-  kind: ImportKind;
-  external?: boolean;
-  original?: string;
-}
-
-export interface MetafileInput {
-  bytes?: number;
-  imports?: MetafileInputImportEdge[];
-  format?: string;
-  loader?: string;
-}
-
-export interface MetafileOutputImportEdge {
-  path: string;
-  kind: ImportKind;
-  external?: boolean;
-}
-
-export interface MetafileOutput {
-  bytes: number;
-  entryPoint?: string;
-  imports?: MetafileOutputImportEdge[];
-  inputs?: Record<string, { bytes?: number; bytesInOutput?: number }>;
-  exports?: string[];
-  cssBundle?: string;
-  type?: string;
-}
-
-export interface Metafile {
-  inputs: Record<string, MetafileInput>;
-  outputs: Record<string, MetafileOutput>;
-}
-
-export interface InitialChunkSummary {
-  outputFile: string;
-  bytes: number;
-  entryPoint: string;
-  isEntry: boolean;
-  includedInputs: string[];
-}
+import type {
+  ImportKind,
+  InclusionStep,
+  InitialChunkSummary,
+  Metafile,
+  OutputInclusionPathResult,
+  OutputPathStep,
+  ReverseDependency,
+} from "./types";
 
 /**
  * Type-guards and coerces a raw JSON value into a strongly-typed `Metafile`.
@@ -244,16 +202,7 @@ function inferRootEntryFor(
   return undefined;
 }
 
-export interface InclusionPathStep {
-  from: string;
-  to: string;
-  kind: ImportKind;
-}
-
-export interface InclusionPathResult {
-  found: boolean;
-  path: InclusionPathStep[]; // entry -> ... -> target
-}
+import type { InclusionPathResult } from "./types";
 
 // Compute an inclusion path from entry input to target input using the inputs graph.
 // Excludes dynamic-import edges for eager reasoning.
@@ -282,11 +231,11 @@ export function findInclusionPath(
         parent[next] = { prev: current, kind: edge.kind };
         if (next === targetInput) {
           // reconstruct
-          const steps: InclusionPathStep[] = [];
+          const steps: InclusionStep[] = [];
           let cur = next;
           while (cur !== entryInput) {
             const p = parent[cur]!;
-            steps.push({ from: p.prev, to: cur, kind: p.kind });
+            steps.push({ from: p.prev, to: cur, kind: p.kind, file: cur });
             cur = p.prev;
           }
           steps.reverse();
@@ -298,17 +247,6 @@ export function findInclusionPath(
   }
 
   return { found: false, path: [] };
-}
-
-export interface OutputPathStep {
-  from: string; // output file
-  to: string; // output file
-  kind: ImportKind;
-}
-
-export interface OutputInclusionPathResult {
-  found: boolean;
-  path: OutputPathStep[]; // entry output -> ... -> target output
 }
 
 export function findOutputInclusionPath(
@@ -348,13 +286,6 @@ export function findOutputInclusionPath(
     }
   }
   return { found: false, path: [] };
-}
-
-export interface ReverseDependency {
-  importer: string;
-  kind: ImportKind;
-  external?: boolean;
-  original?: string;
 }
 
 export function findReverseDependencies(

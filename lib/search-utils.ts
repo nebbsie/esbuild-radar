@@ -1,4 +1,7 @@
-import type { InitialChunkSummary } from "@/lib/metafile";
+import type {
+  InitialChunkSummary,
+  SearchResultNavigationState,
+} from "@/lib/types";
 
 /**
  * Finds chunks that contain files matching the search term.
@@ -92,18 +95,12 @@ export function shouldSwitchChunk(
 /**
  * Navigation state for search results.
  */
-export interface SearchNavigationState {
-  searchTerm: string;
-  currentChunkIndex: number;
-  currentResultIndex: number;
-  matchingChunks: InitialChunkSummary[];
-}
 
 /**
  * Calculates the navigation state for moving to the next search result.
  */
 export function calculateNextSearchResult(
-  currentState: SearchNavigationState,
+  currentState: SearchResultNavigationState,
   direction: "next" | "prev",
   totalResultsInCurrentChunk: number
 ): {

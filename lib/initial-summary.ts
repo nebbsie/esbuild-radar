@@ -3,7 +3,7 @@ import {
   isLikelyServerOutput,
   pickInitialOutput,
 } from "@/lib/analyser";
-import type { Metafile } from "@/lib/metafile";
+import type { Metafile } from "@/lib/types";
 
 // Local re-implementation of classifyInitial from CLI to ensure identical behaviour
 function classifyInitial(meta: Metafile, initial: string) {

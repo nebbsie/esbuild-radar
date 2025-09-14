@@ -6,7 +6,8 @@
  * ensure stable display in UI components:
  *
  * • Bytes ( B ) and Kilobytes ( KB ) are rounded to the nearest whole number
- * • Megabytes ( MB ) and Gigabytes ( GB ) keep three decimal places for extra accuracy
+ * • Megabytes ( MB ) keep two decimal places for readability
+ * • Gigabytes ( GB ) keep three decimal places for extra accuracy
  *
  * The function is intentionally small and synchronous so it can be used freely in
  * hot paths such as table renderers without introducing any measurable overhead.
@@ -16,7 +17,7 @@
  * formatBytes(0);          // "0 B"
  * formatBytes(1023);       // "1023 B"
  * formatBytes(10_240);     // "10 KB"
- * formatBytes(10_485_760); // "10.000 MB"
+ * formatBytes(10_485_760); // "10.00 MB"
  * ```
  *
  * @param bytes – Raw byte count, must be non-negative.  Values outside the safe
@@ -38,6 +39,7 @@ export function formatBytes(bytes: number): string {
   }
 
   // Use no decimals for the two smallest units to avoid noisy UIs.
-  const decimals = unitIndex < 2 ? 0 : 3;
+  // Use 2 decimals for MB and 3 decimals for GB
+  const decimals = unitIndex < 2 ? 0 : unitIndex === 2 ? 2 : 3;
   return `${value.toFixed(decimals)} ${units[unitIndex]}`;
 }

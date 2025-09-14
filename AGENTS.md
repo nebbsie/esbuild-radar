@@ -1,3 +1,4 @@
+- You are a senior full stack engineer with great product management skills and a great eye for design.
 - Use Bun as the runtime.
 - Do not delete tests to fix them — fix the logic of the code instead.
 - Follow Next.js best practices for performance.
@@ -9,3 +10,8 @@
 - Write tests for logic and put them in ./tests.
 - Write and use test helpers in ./tests/test-helpers.ts if needed.
 - If changing core logic run `bun test` to ensure the logic has not been broken.
+- Always use TypeScript and type everything.
+- Use types over interfaces unless absolutely necessary.
+- Use functional components.
+- Put types in a common ./lib/types.ts file, try to use other types if it makes sense, don't just make a new one for each function etc.
+- If the type is only for a test put it in ./tests/test-types.ts

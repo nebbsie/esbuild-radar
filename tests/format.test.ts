@@ -17,8 +17,8 @@ describe("formatBytes", () => {
     expect(formatBytes(10 * 1024)).toBe("10 KB");
   });
 
-  it("formats megabytes with 3 decimals", () => {
-    expect(formatBytes(10 * 1024 * 1024)).toBe("10.000 MB");
+  it("formats megabytes with 2 decimals", () => {
+    expect(formatBytes(10 * 1024 * 1024)).toBe("10.00 MB");
   });
 
   it("formats gigabytes with 3 decimals", () => {

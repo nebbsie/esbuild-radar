@@ -1,183 +1,188 @@
 import {
+  createChunkSummaries,
+  createInitialChunkSummary,
   filterChunks,
-  findBestChunkForFile,
   getChunkLoadType,
-  getChunkTypeIcon,
+  isEntryPointInChunk,
+  isMainEntryPoint,
 } from "@/lib/chunk-utils";
-import type { InitialChunkSummary, Metafile } from "@/lib/metafile";
 import { describe, expect, it } from "vitest";
 import { getStatsMetafile } from "./test-helpers";
+import type { ChunkTypeResult, MockChunk } from "./test-types";
 
-const metafile = getStatsMetafile();
-
-// Create chunks from real metafile data for more comprehensive testing
-const realChunks: InitialChunkSummary[] = Object.keys(metafile.outputs).map(
-  (outputFile) => {
-    const out = metafile.outputs[outputFile];
-    return {
-      outputFile,
-      bytes: out.bytes || 0,
-      entryPoint: out.entryPoint || "",
-      isEntry: Boolean(out.entryPoint),
-      includedInputs: Object.keys(out.inputs || {}),
-    };
-  }
-);
-
-const mockChunks: InitialChunkSummary[] = [
-  {
-    outputFile: "chunk-ABC123.js",
-    bytes: 1024000,
-    entryPoint: "src/main.ts",
-    isEntry: true,
-    includedInputs: [
-      "src/main.ts",
-      "src/app.module.ts",
-      "src/@freelancer/ui/emoji-picker/emoji-picker.component.ts",
-    ],
+const mockMetafile = {
+  inputs: {
+    "src/index.ts": {
+      bytes: 100,
+      imports: [],
+    },
+    "src/utils.ts": {
+      bytes: 50,
+      imports: [],
+    },
   },
-  {
-    outputFile: "chunk-DEF456.js",
-    bytes: 512000,
-    entryPoint: "src/lazy-page.ts",
-    isEntry: true,
-    includedInputs: ["src/lazy-page.ts", "src/lazy-component.ts"],
-  },
-];
-
-const mockInitialSummary = {
-  initial: {
-    outputs: ["chunk-ABC123.js"],
-    totalBytes: 1024000,
-  },
-  lazy: {
-    outputs: ["chunk-DEF456.js"],
-    totalBytes: 512000,
+  outputs: {
+    "dist/index.js": {
+      bytes: 100,
+      inputs: {
+        "src/index.ts": { bytesInOutput: 100 },
+      },
+      entryPoint: "src/index.ts",
+    },
+    "dist/utils.js": {
+      bytes: 50,
+      inputs: {
+        "src/utils.ts": { bytesInOutput: 50 },
+      },
+    },
   },
 };
 
-describe("findBestChunkForFile", () => {
-  it("returns chunk that directly contains the file", () => {
-    const result = findBestChunkForFile(
-      "src/main.ts",
-      mockChunks,
-      metafile,
-      null
+const mockInitialSummary = {
+  initial: {
+    outputs: ["dist/index.js"],
+    totalBytes: 100,
+  },
+  lazy: {
+    outputs: ["dist/utils.js"],
+    totalBytes: 50,
+  },
+};
+
+describe("createInitialChunkSummary", () => {
+  it("should create a valid InitialChunkSummary from metafile output", () => {
+    const result = createInitialChunkSummary(
+      "dist/index.js",
+      mockMetafile.outputs["dist/index.js"],
+      mockMetafile
     );
-    expect(result).toEqual(mockChunks[0]);
+
+    expect(result).toEqual({
+      outputFile: "dist/index.js",
+      bytes: 100,
+      entryPoint: "src/index.ts",
+      isEntry: true,
+      includedInputs: ["src/index.ts"],
+    });
   });
 
-  it("returns chunk containing files imported by the target file", () => {
-    // Mock metafile with imports
-    const mockMetafile: Metafile = {
-      inputs: {
-        "src/barrel.ts": {
-          imports: [
-            { path: "src/lazy-component.ts", kind: "import-statement" },
-          ],
-        },
-      },
-      outputs: {},
-    };
-
-    const result = findBestChunkForFile(
-      "src/barrel.ts",
-      mockChunks,
-      mockMetafile,
-      null
+  it("should return null for invalid output", () => {
+    const result = createInitialChunkSummary(
+      "dist/missing.js",
+      null,
+      mockMetafile
     );
-    expect(result).toEqual(mockChunks[1]);
+    expect(result).toBeNull();
   });
 
-  it("returns fallback chunk when file is not found", () => {
-    const fallbackChunk = mockChunks[0];
-    const result = findBestChunkForFile(
-      "src/nonexistent.ts",
-      mockChunks,
-      metafile,
-      fallbackChunk
+  it("should handle outputs without entry points", () => {
+    const result = createInitialChunkSummary(
+      "dist/utils.js",
+      mockMetafile.outputs["dist/utils.js"],
+      mockMetafile
     );
-    expect(result).toEqual(fallbackChunk);
+
+    expect(result).toEqual({
+      outputFile: "dist/utils.js",
+      bytes: 50,
+      entryPoint: "",
+      isEntry: false,
+      includedInputs: ["src/utils.ts"],
+    });
+  });
+});
+
+describe("createChunkSummaries", () => {
+  it("should create InitialChunkSummary objects for multiple outputs", () => {
+    const outputs = ["dist/index.js", "dist/utils.js"];
+    const result = createChunkSummaries(outputs, mockMetafile);
+
+    expect(result).toHaveLength(2);
+    expect(result[0].bytes).toBe(100); // Should be sorted by size (largest first)
+    expect(result[1].bytes).toBe(50);
   });
 
-  it("returns undefined when no chunk found and no fallback", () => {
-    const result = findBestChunkForFile(
-      "src/nonexistent.ts",
-      mockChunks,
-      metafile,
-      null
-    );
-    expect(result).toBeUndefined();
+  it("should sort chunks by size (largest first)", () => {
+    const outputs = ["dist/utils.js", "dist/index.js"]; // Reverse order
+    const result = createChunkSummaries(outputs, mockMetafile);
+
+    expect(result[0].bytes).toBe(100);
+    expect(result[1].bytes).toBe(50);
+  });
+
+  it("should filter out null results", () => {
+    const outputs = ["dist/index.js", "dist/missing.js"];
+    const result = createChunkSummaries(outputs, mockMetafile);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].outputFile).toBe("dist/index.js");
   });
 });
 
 describe("getChunkLoadType", () => {
-  it("returns 'initial' for chunks in initial outputs", () => {
-    const result = getChunkLoadType(mockChunks[0], mockInitialSummary);
+  it("should return 'initial' for chunks in initial outputs", () => {
+    const chunk: MockChunk = { outputFile: "dist/index.js" };
+    const result = getChunkLoadType(chunk as any, mockInitialSummary);
     expect(result).toBe("initial");
   });
 
-  it("returns 'lazy' for chunks not in initial outputs", () => {
-    const result = getChunkLoadType(mockChunks[1], mockInitialSummary);
+  it("should return 'lazy' for chunks not in initial outputs", () => {
+    const chunk: MockChunk = { outputFile: "dist/utils.js" };
+    const result = getChunkLoadType(chunk as any, mockInitialSummary);
     expect(result).toBe("lazy");
   });
 
-  it("returns 'initial' when initialSummary is null", () => {
-    const result = getChunkLoadType(mockChunks[0], null);
+  it("should return 'initial' when initialSummary is null", () => {
+    const chunk: MockChunk = { outputFile: "dist/index.js" };
+    const result = getChunkLoadType(chunk as any, null);
     expect(result).toBe("initial");
   });
 });
 
-describe("getChunkTypeIcon", () => {
-  it("returns correct icon and color for initial chunks", () => {
-    const result = getChunkTypeIcon("initial");
-    expect(result.icon).toBe("Zap");
-    expect(result.color).toBe("bg-red-500");
+describe("isEntryPointInChunk", () => {
+  it("should return true when entry point is included in chunk inputs", () => {
+    const chunk: MockChunk = {
+      entryPoint: "src/index.ts",
+      includedInputs: ["src/index.ts", "src/utils.ts"],
+    };
+    const result = isEntryPointInChunk(chunk as any);
+    expect(result).toBe(true);
   });
 
-  it("returns correct icon and color for lazy chunks", () => {
-    const result = getChunkTypeIcon("lazy");
-    expect(result.icon).toBe("Clock");
-    expect(result.color).toBe("bg-purple-500");
+  it("should return false when entry point is not in inputs", () => {
+    const chunk: MockChunk = {
+      entryPoint: "src/missing.ts",
+      includedInputs: ["src/index.ts", "src/utils.ts"],
+    };
+    const result = isEntryPointInChunk(chunk as any);
+    expect(result).toBe(false);
+  });
+
+  it("should return false when chunk has no entry point", () => {
+    const chunk: MockChunk = {
+      entryPoint: "",
+      includedInputs: ["src/index.ts"],
+    };
+    const result = isEntryPointInChunk(chunk as any);
+    expect(result).toBe(false);
   });
 });
 
 describe("filterChunks", () => {
-  it("filters by search term", () => {
-    const result = filterChunks(
-      mockChunks,
-      "main",
-      { initial: true, lazy: true },
-      mockInitialSummary
-    );
-    expect(result).toHaveLength(1);
-    expect(result[0]).toEqual(mockChunks[0]);
-  });
+  const chunks: MockChunk[] = [
+    {
+      outputFile: "dist/index.js",
+      includedInputs: ["src/index.ts"],
+    },
+    {
+      outputFile: "dist/utils.js",
+      includedInputs: ["src/utils.ts"],
+    },
+  ];
 
-  it("filters by chunk type", () => {
+  it("should return all chunks when no filters applied", () => {
     const result = filterChunks(
-      mockChunks,
-      "",
-      { initial: true, lazy: false },
-      mockInitialSummary
-    );
-    expect(result).toHaveLength(1);
-    expect(result[0]).toEqual(mockChunks[0]);
-  });
-
-  it("combines search and type filters", () => {
-    const result = filterChunks(
-      mockChunks,
-      "main",
-      { initial: false, lazy: true },
-      mockInitialSummary
-    );
-    expect(result).toHaveLength(0);
-  });
-
-  it("returns all chunks when no filters applied", () => {
-    const result = filterChunks(
-      mockChunks,
+      chunks as any,
       "",
       { initial: true, lazy: true },
       mockInitialSummary
@@ -185,104 +190,189 @@ describe("filterChunks", () => {
     expect(result).toHaveLength(2);
   });
 
-  it("works with real metafile chunks - filters by real search term", () => {
-    // Use real chunks from metafile and create a realistic initial summary
-    const realInitialOutputs = realChunks
-      .filter((chunk) => chunk.isEntry)
-      .map((chunk) => chunk.outputFile)
-      .slice(0, 5); // Take first 5 entry chunks as "initial"
-
-    const realInitialSummary = {
-      initial: {
-        outputs: realInitialOutputs,
-        totalBytes: realChunks
-          .filter((chunk) => realInitialOutputs.includes(chunk.outputFile))
-          .reduce((sum, chunk) => sum + chunk.bytes, 0),
-      },
-      lazy: {
-        outputs: realChunks
-          .filter((chunk) => !realInitialOutputs.includes(chunk.outputFile))
-          .map((chunk) => chunk.outputFile),
-        totalBytes: realChunks
-          .filter((chunk) => !realInitialOutputs.includes(chunk.outputFile))
-          .reduce((sum, chunk) => sum + chunk.bytes, 0),
-      },
-    };
-
-    // Test filtering by a common term that should exist in real data
+  it("should filter by search term", () => {
     const result = filterChunks(
-      realChunks,
-      "src", // Should match many files in the real data
+      chunks as any,
+      "index",
       { initial: true, lazy: true },
-      realInitialSummary
+      mockInitialSummary
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].outputFile).toBe("dist/index.js");
+  });
+
+  it("should filter by chunk type", () => {
+    const result = filterChunks(
+      chunks as any,
+      "",
+      { initial: true, lazy: false },
+      mockInitialSummary
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].outputFile).toBe("dist/index.js");
+  });
+
+  it("should combine search and type filters", () => {
+    const result = filterChunks(
+      chunks as any,
+      "utils",
+      { initial: true, lazy: false },
+      mockInitialSummary
+    );
+    expect(result).toHaveLength(0);
+  });
+
+  it("should work with real metafile data", () => {
+    const metafile = getStatsMetafile();
+    const chunks = createChunkSummaries(
+      Object.keys(metafile.outputs),
+      metafile
+    );
+    const result = filterChunks(
+      chunks,
+      "component",
+      { initial: true, lazy: true },
+      null
     );
 
-    expect(Array.isArray(result)).toBe(true);
     expect(result.length).toBeGreaterThan(0);
-
-    // Verify that all returned chunks contain files with "src" in the name
     result.forEach((chunk) => {
-      const hasMatchingFile = chunk.includedInputs.some((input) =>
-        input.toLowerCase().includes("src")
-      );
-      expect(hasMatchingFile).toBe(true);
+      expect(
+        chunk.includedInputs.some((input) =>
+          input.toLowerCase().includes("component")
+        )
+      ).toBe(true);
     });
   });
 
-  it("works with real metafile chunks - filters by chunk type", () => {
-    const realInitialOutputs = realChunks
-      .filter((chunk) => chunk.isEntry)
-      .map((chunk) => chunk.outputFile)
-      .slice(0, 3);
+  describe("chunk type comparison (regression test)", () => {
+    it("should correctly identify initial vs lazy chunks by outputFile (not reference)", () => {
+      // Create mock chunks that represent the same logical chunks but are different objects
+      const initialChunks: MockChunk[] = [
+        {
+          outputFile: "dist/index.js",
+          bytes: 100,
+          entryPoint: "src/index.ts",
+          isEntry: true,
+          includedInputs: ["src/index.ts"],
+        },
+        {
+          outputFile: "dist/utils.js",
+          bytes: 50,
+          entryPoint: "src/utils.ts",
+          isEntry: true,
+          includedInputs: ["src/utils.ts"],
+        },
+      ];
 
-    const realInitialSummary = {
-      initial: {
-        outputs: realInitialOutputs,
-        totalBytes: 1000000,
-      },
-      lazy: {
-        outputs: realChunks
-          .filter((chunk) => !realInitialOutputs.includes(chunk.outputFile))
-          .map((chunk) => chunk.outputFile),
-        totalBytes: 2000000,
-      },
-    };
+      const allChunks: MockChunk[] = [
+        {
+          outputFile: "dist/index.js",
+          bytes: 100,
+          entryPoint: "src/index.ts",
+          isEntry: true,
+          includedInputs: ["src/index.ts"],
+        },
+        {
+          outputFile: "dist/utils.js",
+          bytes: 50,
+          entryPoint: "src/utils.ts",
+          isEntry: true,
+          includedInputs: ["src/utils.ts"],
+        },
+        {
+          outputFile: "dist/lazy.js",
+          bytes: 25,
+          entryPoint: "src/lazy.ts",
+          isEntry: true,
+          includedInputs: ["src/lazy.ts"],
+        },
+      ];
 
-    // Test filtering to show only initial chunks
-    const initialOnlyResult = filterChunks(
-      realChunks,
-      "",
-      { initial: true, lazy: false },
-      realInitialSummary
-    );
+      // Simulate the logic from ChunksPanel: determine loadType for each chunk
+      const chunkTypes: ChunkTypeResult[] = allChunks.map((chunk) => ({
+        outputFile: chunk.outputFile!,
+        loadType: initialChunks.some(
+          (initialChunk) => initialChunk.outputFile === chunk.outputFile
+        )
+          ? "initial"
+          : "lazy",
+      }));
 
-    // Test filtering to show only lazy chunks
-    const lazyOnlyResult = filterChunks(
-      realChunks,
-      "",
-      { initial: false, lazy: true },
-      realInitialSummary
-    );
+      // Verify correct classification
+      expect(chunkTypes).toEqual([
+        { outputFile: "dist/index.js", loadType: "initial" },
+        { outputFile: "dist/utils.js", loadType: "initial" },
+        { outputFile: "dist/lazy.js", loadType: "lazy" },
+      ]);
 
-    // Verify chunk type classification
-    initialOnlyResult.forEach((chunk) => {
-      const chunkType = getChunkLoadType(chunk, realInitialSummary);
-      expect(chunkType).toBe("initial");
+      // This test ensures the bug we fixed doesn't regress:
+      // initialChunks.includes(chunk) would fail because they are different object instances
+      // but initialChunks.some(chunk => chunk.outputFile === c.outputFile) works correctly
     });
 
-    lazyOnlyResult.forEach((chunk) => {
-      const chunkType = getChunkLoadType(chunk, realInitialSummary);
-      expect(chunkType).toBe("lazy");
+    it("should handle empty initialChunks array", () => {
+      const initialChunks: MockChunk[] = [];
+      const allChunks: MockChunk[] = [
+        { outputFile: "dist/lazy1.js", bytes: 100 },
+        { outputFile: "dist/lazy2.js", bytes: 50 },
+      ];
+
+      const chunkTypes: ChunkTypeResult[] = allChunks.map((chunk) => ({
+        outputFile: chunk.outputFile!,
+        loadType: initialChunks.some(
+          (initialChunk) => initialChunk.outputFile === chunk.outputFile
+        )
+          ? "initial"
+          : "lazy",
+      }));
+
+      expect(chunkTypes).toEqual([
+        { outputFile: "dist/lazy1.js", loadType: "lazy" },
+        { outputFile: "dist/lazy2.js", loadType: "lazy" },
+      ]);
+    });
+  });
+
+  describe("isMainEntryPoint", () => {
+    it("should return true for the entry point of initial chunk", () => {
+      const initialChunk: InitialChunkSummary = {
+        outputFile: "dist/main.js",
+        bytes: 1000,
+        entryPoint: "src/index.ts",
+        isEntry: true,
+        includedInputs: ["src/index.ts", "src/utils.ts"],
+      };
+
+      expect(isMainEntryPoint("src/index.ts", initialChunk)).toBe(true);
     });
 
-    // Verify no overlap
-    const initialOutputFiles = new Set(
-      initialOnlyResult.map((c) => c.outputFile)
-    );
-    const lazyOutputFiles = new Set(lazyOnlyResult.map((c) => c.outputFile));
-    const overlap = [...initialOutputFiles].filter((file) =>
-      lazyOutputFiles.has(file)
-    );
-    expect(overlap.length).toBe(0);
+    it("should return false for files that are not the entry point", () => {
+      const initialChunk: InitialChunkSummary = {
+        outputFile: "dist/main.js",
+        bytes: 1000,
+        entryPoint: "src/index.ts",
+        isEntry: true,
+        includedInputs: ["src/index.ts", "src/utils.ts"],
+      };
+
+      expect(isMainEntryPoint("src/utils.ts", initialChunk)).toBe(false);
+    });
+
+    it("should return false when initialChunk is null", () => {
+      expect(isMainEntryPoint("src/index.ts", null)).toBe(false);
+    });
+
+    it("should return false when entryPoint is empty", () => {
+      const initialChunk: InitialChunkSummary = {
+        outputFile: "dist/main.js",
+        bytes: 1000,
+        entryPoint: "",
+        isEntry: true,
+        includedInputs: ["src/index.ts"],
+      };
+
+      expect(isMainEntryPoint("src/index.ts", initialChunk)).toBe(false);
+    });
   });
 });

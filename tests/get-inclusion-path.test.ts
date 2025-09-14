@@ -1,5 +1,5 @@
 import { getInclusionPath } from "@/lib/analyser";
-import type { InitialChunkSummary } from "@/lib/metafile";
+import type { InitialChunkSummary } from "@/lib/types";
 import { describe, expect, it } from "vitest";
 import { getStatsMetafile } from "./test-helpers";
 

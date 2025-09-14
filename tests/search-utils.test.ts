@@ -1,4 +1,3 @@
-import type { InitialChunkSummary } from "@/lib/metafile";
 import {
   calculateNextSearchResult,
   findChunkIndex,
@@ -7,6 +6,7 @@ import {
   shouldSelectChunkEntryPoint,
   shouldSwitchChunk,
 } from "@/lib/search-utils";
+import type { InitialChunkSummary } from "@/lib/types";
 import { describe, expect, it } from "vitest";
 import { getStatsMetafile } from "./test-helpers";
 
@@ -249,7 +249,7 @@ describe("shouldSelectChunkEntryPoint", () => {
   it("returns false when chunk has no entry point", () => {
     const chunkWithoutEntryPoint: InitialChunkSummary = {
       ...mockChunks[0],
-      entryPoint: undefined,
+      entryPoint: "",
     };
     const result = shouldSelectChunkEntryPoint(chunkWithoutEntryPoint);
     expect(result).toBe(false);

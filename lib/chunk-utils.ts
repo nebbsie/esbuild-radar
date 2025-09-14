@@ -1,4 +1,9 @@
-import type { InitialChunkSummary, Metafile } from "@/lib/metafile";
+import { inferEntryForOutput } from "@/lib/analyser";
+import type {
+  InitialChunkSummary,
+  Metafile,
+  MetafileOutput,
+} from "@/lib/types";
 
 /**
  * Finds the best chunk for a given file path.
@@ -44,6 +49,23 @@ export function findBestChunkForFile(
 
   // As a last resort, return the currently selected chunk if it exists
   return currentChunk || undefined;
+}
+
+/**
+ * Determines if a file is the main entry point of the application (entry point of the initial chunk).
+ *
+ * This is used to show the correct icon type in the UI - only the actual entry point
+ * of the initial chunk should display the "main-entry" icon.
+ *
+ * @param filePath - The file path to check
+ * @param initialChunk - The initial chunk summary, if available
+ * @returns true if the file is the main entry point, false otherwise
+ */
+export function isMainEntryPoint(
+  filePath: string,
+  initialChunk: InitialChunkSummary | null
+): boolean {
+  return Boolean(initialChunk && filePath === initialChunk.entryPoint);
 }
 
 /**
@@ -130,4 +152,70 @@ export function filterChunks(
 
     return matchesSearch && matchesType;
   });
+}
+
+/**
+ * Creates an InitialChunkSummary object from a metafile output entry.
+ *
+ * This is a pure function that converts the raw metafile output data
+ * into the standardized InitialChunkSummary format used throughout the app.
+ *
+ * @param outputFile – The output file path (key in metafile.outputs)
+ * @param output – The output object from the metafile
+ * @param metafile – The complete metafile for entry point inference
+ * @returns InitialChunkSummary object, or null if output is invalid
+ */
+export function createInitialChunkSummary(
+  outputFile: string,
+  output: MetafileOutput | null,
+  metafile: Metafile
+): InitialChunkSummary | null {
+  if (!output) return null;
+
+  return {
+    outputFile,
+    bytes: output.bytes || 0,
+    entryPoint:
+      output.entryPoint || inferEntryForOutput(metafile, outputFile) || "",
+    isEntry: Boolean(output.entryPoint),
+    includedInputs: Object.keys(output.inputs || {}),
+  };
+}
+
+/**
+ * Converts an array of output file names to InitialChunkSummary objects.
+ *
+ * This function takes a list of output files and creates InitialChunkSummary
+ * objects for each one, sorting them by size (largest first).
+ *
+ * @param outputFiles – Array of output file paths
+ * @param metafile – The metafile containing output data
+ * @returns Array of InitialChunkSummary objects, sorted by size
+ */
+export function createChunkSummaries(
+  outputFiles: string[],
+  metafile: Metafile
+): InitialChunkSummary[] {
+  return outputFiles
+    .map((outputFile) => {
+      const output = metafile.outputs[outputFile];
+      return createInitialChunkSummary(outputFile, output, metafile);
+    })
+    .filter((chunk): chunk is InitialChunkSummary => Boolean(chunk))
+    .sort((a, b) => b.bytes - a.bytes); // Sort by size (largest first)
+}
+
+/**
+ * Determines if an entry point is included in a chunk's inputs.
+ *
+ * This is a common check used throughout the app to determine if a chunk's
+ * entry point is actually bundled within that chunk.
+ *
+ * @param chunk – The chunk to check
+ * @returns true if the entry point is included in the chunk's inputs
+ */
+export function isEntryPointInChunk(chunk: InitialChunkSummary): boolean {
+  return Boolean(
+    chunk.entryPoint && chunk.includedInputs.includes(chunk.entryPoint)
+  );
 }

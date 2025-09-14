@@ -1,10 +1,11 @@
-import type { InitialChunkSummary } from "@/lib/metafile";
 import {
   calculateInclusionPath,
+  determineModuleForChunkOpening,
   getInitialChunkEntryPoint,
   ModuleNavigationHistory,
   selectModule,
 } from "@/lib/navigation-utils";
+import type { InitialChunkSummary } from "@/lib/types";
 import { describe, expect, it } from "vitest";
 import { getStatsMetafile } from "./test-helpers";
 
@@ -68,18 +69,14 @@ describe("getInitialChunkEntryPoint", () => {
   });
 
   it("returns null when metafile is null", () => {
-    const result = getInitialChunkEntryPoint(null as any, mockInitialSummary);
+    const result = getInitialChunkEntryPoint(null!, mockInitialSummary);
     expect(result).toBeNull();
   });
 });
 
 describe("calculateInclusionPath", () => {
   it("returns found false when metafile is null", () => {
-    const result = calculateInclusionPath(
-      null as any,
-      "src/main.ts",
-      "src/main.ts"
-    );
+    const result = calculateInclusionPath(null!, "src/main.ts", "src/main.ts");
     expect(result.found).toBe(false);
     expect(result.path).toEqual([]);
   });
@@ -276,5 +273,169 @@ describe("ModuleNavigationHistory", () => {
     expect(history.getCurrent()).toBeNull();
     expect(history.hasPrevious()).toBe(false);
     expect(history.hasNext()).toBe(false);
+  });
+});
+
+describe("determineModuleForChunkOpening", () => {
+  const mockInitialChunk: InitialChunkSummary = {
+    outputFile: "initial-chunk.js",
+    bytes: 1000,
+    entryPoint: "src/main.ts",
+    isEntry: true,
+    includedInputs: ["src/main.ts"],
+  };
+
+  it("selects entry point when it's included in chunk inputs", () => {
+    const chunk: InitialChunkSummary = {
+      outputFile: "test-chunk.js",
+      bytes: 500,
+      entryPoint: "src/component.ts",
+      isEntry: false,
+      includedInputs: ["src/component.ts", "src/utils.ts"],
+    };
+
+    const result = determineModuleForChunkOpening(
+      chunk,
+      metafile,
+      mockInitialChunk
+    );
+
+    expect(result.selectedModule).toBe("src/component.ts");
+    expect(result.inclusionPath).toBeDefined();
+    expect(result.inclusionPath?.found).toBeDefined();
+  });
+
+  it("returns null module when entry point is not in chunk inputs", () => {
+    const chunk: InitialChunkSummary = {
+      outputFile: "test-chunk.js",
+      bytes: 500,
+      entryPoint: "src/missing-entry.ts", // Entry point not in inputs
+      isEntry: false,
+      includedInputs: ["src/component.ts", "src/utils.ts"],
+    };
+
+    const result = determineModuleForChunkOpening(
+      chunk,
+      metafile,
+      mockInitialChunk
+    );
+
+    expect(result.selectedModule).toBeNull();
+    expect(result.inclusionPath).toBeDefined();
+  });
+
+  it("returns null module and inclusion path when chunk has no entry point", () => {
+    const chunk: InitialChunkSummary = {
+      outputFile: "test-chunk.js",
+      bytes: 500,
+      entryPoint: "", // No entry point
+      isEntry: false,
+      includedInputs: ["src/component.ts", "src/utils.ts"],
+    };
+
+    const result = determineModuleForChunkOpening(
+      chunk,
+      metafile,
+      mockInitialChunk
+    );
+
+    expect(result.selectedModule).toBeNull();
+    expect(result.inclusionPath).toBeDefined();
+  });
+
+  it("returns null inclusion path when no metafile provided", () => {
+    const chunk: InitialChunkSummary = {
+      outputFile: "test-chunk.js",
+      bytes: 500,
+      entryPoint: "src/component.ts",
+      isEntry: false,
+      includedInputs: ["src/component.ts", "src/utils.ts"],
+    };
+
+    const result = determineModuleForChunkOpening(
+      chunk,
+      null,
+      mockInitialChunk
+    );
+
+    expect(result.selectedModule).toBe("src/component.ts");
+    expect(result.inclusionPath).toBeNull();
+  });
+
+  it("uses first module for inclusion path when entry point not in inputs", () => {
+    const chunk: InitialChunkSummary = {
+      outputFile: "test-chunk.js",
+      bytes: 500,
+      entryPoint: "src/missing.ts",
+      isEntry: false,
+      includedInputs: ["src/first.ts", "src/second.ts", "src/third.ts"],
+    };
+
+    const result = determineModuleForChunkOpening(
+      chunk,
+      metafile,
+      mockInitialChunk
+    );
+
+    expect(result.selectedModule).toBeNull();
+    expect(result.inclusionPath).toBeDefined();
+    // The inclusion path should be calculated for the first module (src/first.ts)
+  });
+
+  it("returns null inclusion path when chunk has no inputs", () => {
+    const chunk: InitialChunkSummary = {
+      outputFile: "empty-chunk.js",
+      bytes: 0,
+      entryPoint: "src/main.ts",
+      isEntry: true,
+      includedInputs: [], // Empty inputs
+    };
+
+    const result = determineModuleForChunkOpening(
+      chunk,
+      metafile,
+      mockInitialChunk
+    );
+
+    expect(result.selectedModule).toBeNull();
+    expect(result.inclusionPath).toBeNull();
+  });
+
+  it("works with real metafile chunks - entry point included", () => {
+    // Find a chunk that has an entry point included in its inputs
+    const chunkWithValidEntry = realChunks.find(
+      (chunk) =>
+        chunk.entryPoint && chunk.includedInputs.includes(chunk.entryPoint)
+    );
+
+    if (chunkWithValidEntry) {
+      const result = determineModuleForChunkOpening(
+        chunkWithValidEntry,
+        metafile,
+        mockInitialChunk
+      );
+
+      expect(result.selectedModule).toBe(chunkWithValidEntry.entryPoint);
+      expect(result.inclusionPath).toBeDefined();
+    }
+  });
+
+  it("works with real metafile chunks - entry point not included", () => {
+    // Find a chunk that has an entry point NOT included in its inputs
+    const chunkWithInvalidEntry = realChunks.find(
+      (chunk) =>
+        chunk.entryPoint && !chunk.includedInputs.includes(chunk.entryPoint)
+    );
+
+    if (chunkWithInvalidEntry) {
+      const result = determineModuleForChunkOpening(
+        chunkWithInvalidEntry,
+        metafile,
+        mockInitialChunk
+      );
+
+      expect(result.selectedModule).toBeNull();
+      expect(result.inclusionPath).toBeDefined();
+    }
   });
 });

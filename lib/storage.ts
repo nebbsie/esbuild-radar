@@ -1,7 +1,4 @@
-interface MetafileData {
-  data: string;
-  name?: string;
-}
+import type { MetafileData } from "./types";
 
 class MetafileStorage {
   private dbName = "esbuild-analyser";

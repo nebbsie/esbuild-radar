@@ -1,4 +1,4 @@
-import { Metafile } from "@/lib/metafile";
+import type { Metafile } from "@/lib/types";
 import { readFileSync } from "fs";
 
 export const getStatsMetafile = () => {

@@ -1,12 +1,22 @@
 // Bundle analysis helpers used by the UI. Keep UI rendering out of this file.
 
 import type {
+  ClassifiedChunks,
   ImportKind,
   InclusionPathResult,
-  InclusionPathStep,
+  InclusionStep,
   InitialChunkSummary,
   Metafile,
-} from "@/lib/metafile";
+  OutputLoadClassification,
+} from "@/lib/types";
+
+// Local type definitions for analyser-specific interfaces
+export interface InclusionPathStep {
+  file: string;
+  importStatement: string;
+  isDynamicImport: boolean;
+  importerChunkType: "initial" | "lazy";
+}
 
 /**
  * Determines whether a given output filename represents a browser-runnable
@@ -140,11 +150,6 @@ export function listDynamicImportingOutputs(
   return importers;
 }
 
-export type LoadClassification = {
-  kind: "initial" | "lazy";
-  importers?: string[];
-};
-
 /**
  * Classifies an output as initial or lazy using computeInitialOutputsSet. Lazy if
  * not statically reachable from entries. Returns dynamic importers for context.
@@ -152,7 +157,7 @@ export type LoadClassification = {
 export function classifyOutputLoadType(
   meta: Metafile,
   outputFile: string
-): LoadClassification {
+): OutputLoadClassification {
   const initial = computeInitialOutputsSet(meta);
   if (!initial.has(outputFile)) {
     return {
@@ -244,12 +249,6 @@ export function pickInitialOutput(
 
   scored.sort((a, b) => b.s - a.s || (a.k < b.k ? -1 : a.k > b.k ? 1 : 0));
   return scored[0]?.k;
-}
-
-export interface ClassifiedChunks {
-  initial: InitialChunkSummary | undefined;
-  initialChunks: InitialChunkSummary[];
-  lazy: InitialChunkSummary[];
 }
 
 /**
@@ -368,11 +367,11 @@ function findInclusionPathIncludingDynamic(
         parent[next] = { prev: current, kind: edge.kind };
         if (next === targetInput) {
           // reconstruct
-          const steps: InclusionPathStep[] = [];
+          const steps: InclusionStep[] = [];
           let cur = next;
           while (cur !== entryInput) {
             const p = parent[cur]!;
-            steps.push({ from: p.prev, to: cur, kind: p.kind });
+            steps.push({ from: p.prev, to: cur, kind: p.kind, file: cur });
             cur = p.prev;
           }
           steps.reverse();
@@ -392,7 +391,7 @@ function findInclusionPathIncludingDynamic(
  * This follows both static and dynamic imports.
  * This is a convenience function that automatically determines the entry point.
  */
-export interface InclusionStep {
+export interface InclusionPathStep {
   file: string;
   importStatement: string;
   isDynamicImport: boolean;
@@ -403,7 +402,7 @@ export function getInclusionPath(
   meta: Metafile,
   targetFile: string,
   chunks: InitialChunkSummary[]
-): InclusionStep[] {
+): InclusionPathStep[] {
   // Find the initial entry point
   const initialOutput = pickInitialOutput(meta);
   if (!initialOutput) {
@@ -433,7 +432,7 @@ export function getInclusionPath(
   if (!result.found) return [];
 
   // Convert the path to show actual import statements with import type info
-  const inclusionSteps: InclusionStep[] = [];
+  const inclusionSteps: InclusionPathStep[] = [];
 
   for (const step of result.path) {
     const input = meta.inputs[step.from];
@@ -470,7 +469,7 @@ export function getInclusionPath(
  * Returns information about where a file is imported from and the loading type of each importer.
  * This is useful for understanding the impact of a file on the bundle.
  */
-export interface ImportSource {
+export interface FileImportSource {
   importer: string; // The file that imports the target
   importStatement: string; // The import statement used (original or resolved path)
   chunkType: "initial" | "lazy"; // Whether the importer is initial or lazy loaded
@@ -484,8 +483,8 @@ export function getImportSources(
   targetFile: string,
   chunks: InitialChunkSummary[],
   initialOutputs: string[]
-): ImportSource[] {
-  const sources: ImportSource[] = [];
+): FileImportSource[] {
+  const sources: FileImportSource[] = [];
 
   // Build reverse dependencies by scanning all inputs
   for (const [inputPath, input] of Object.entries(meta.inputs)) {
@@ -529,7 +528,7 @@ export function getImportSources(
  * Returns chunks that were created by dynamic imports from the given file.
  * This helps understand what lazy modules a file generates.
  */
-export interface CreatedChunk {
+export interface DynamicCreatedChunk {
   chunk: InitialChunkSummary;
   dynamicImportPath: string;
 }
@@ -538,8 +537,8 @@ export function getChunksCreatedByFile(
   meta: Metafile,
   filePath: string,
   chunks: InitialChunkSummary[]
-): CreatedChunk[] {
-  const createdChunks: CreatedChunk[] = [];
+): DynamicCreatedChunk[] {
+  const createdChunks: DynamicCreatedChunk[] = [];
 
   // Get the file's imports from the metafile
   const fileInputs = meta.inputs[filePath];

@@ -1,10 +1,10 @@
 import { inferEntryForOutput } from "@/lib/analyser";
+import { findInclusionPath } from "@/lib/metafile";
 import type {
   InclusionPathResult,
   InitialChunkSummary,
   Metafile,
-} from "@/lib/metafile";
-import { findInclusionPath } from "@/lib/metafile";
+} from "@/lib/types";
 
 /**
  * Calculates the initial chunk entry point from the summary data.
@@ -89,6 +89,61 @@ export function selectModule(
 }
 
 /**
+ * Determines what module should be selected when a chunk is opened/clicked.
+ *
+ * When opening a chunk in the UI, this function decides:
+ * 1. Whether to select the chunk's entry point (if it exists and is included)
+ * 2. Whether to select no module (null) but still calculate inclusion path
+ * 3. Which module to use for calculating the inclusion path when no entry point
+ *
+ * @param chunk - The chunk being opened
+ * @param metafile - The metafile containing file relationships
+ * @param initialChunk - The initial chunk for fallback entry point calculation
+ * @returns Object containing the selected module and inclusion path result
+ */
+export function determineModuleForChunkOpening(
+  chunk: InitialChunkSummary,
+  metafile: Metafile | null,
+  initialChunk: InitialChunkSummary | null
+): {
+  selectedModule: string | null;
+  inclusionPath: InclusionPathResult | null;
+} {
+  // Check if the chunk has an entry point that's actually included in its inputs
+  const entryPointInChunk =
+    chunk.entryPoint && chunk.includedInputs.includes(chunk.entryPoint);
+
+  if (entryPointInChunk) {
+    // Entry point is valid - select it and calculate its inclusion path
+    const rootEntry = initialChunk?.entryPoint || chunk.entryPoint;
+    const inclusion =
+      metafile && rootEntry
+        ? findInclusionPath(metafile, rootEntry, chunk.entryPoint)
+        : null;
+
+    return {
+      selectedModule: chunk.entryPoint,
+      inclusionPath: inclusion,
+    };
+  } else {
+    // No valid entry point - select null but calculate inclusion path for first module
+    const rootEntry = initialChunk?.entryPoint || chunk.entryPoint;
+    let inclusion: InclusionPathResult | null = null;
+
+    if (metafile && rootEntry && chunk.includedInputs.length > 0) {
+      // Use the first module in the chunk for inclusion path calculation
+      const firstModule = chunk.includedInputs[0];
+      inclusion = findInclusionPath(metafile, rootEntry, firstModule);
+    }
+
+    return {
+      selectedModule: null,
+      inclusionPath: inclusion,
+    };
+  }
+}
+
+/**
  * Manages navigation history for module transitions.
  *
  * This utility tracks the history of module selections to enable
@@ -104,6 +159,13 @@ export class ModuleNavigationHistory {
   push(modulePath: string): void {
     // Remove any forward history when adding a new entry
     this.history = this.history.slice(0, this.currentIndex + 1);
+
+    // Bail if the last entry is the same as the one we want to push
+    if (this.history[this.history.length - 1] === modulePath) {
+      this.currentIndex = this.history.length - 1;
+      return;
+    }
+
     this.history.push(modulePath);
     this.currentIndex = this.history.length - 1;
   }
@@ -149,6 +211,13 @@ export class ModuleNavigationHistory {
    */
   getCurrent(): string | null {
     return this.currentIndex >= 0 ? this.history[this.currentIndex] : null;
+  }
+
+  /**
+   * Gets the length of the navigation history.
+   */
+  getLength(): number {
+    return this.history.length;
   }
 
   /**

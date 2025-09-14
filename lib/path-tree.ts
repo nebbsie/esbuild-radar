@@ -1,10 +1,4 @@
-export type PathTreeNode = {
-  name: string;
-  path: string;
-  size: number;
-  type: "dir" | "file";
-  children?: PathTreeNode[];
-};
+import type { PathTreeNode } from "./types";
 
 export function findOptimalRoot(
   files: { path: string; size: number }[]
