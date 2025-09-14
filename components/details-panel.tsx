@@ -32,13 +32,6 @@ interface DetailsPanelProps {
     chunk?: InitialChunkSummary,
     historyMode?: "push" | "reset" | "none"
   ) => void;
-  getChunkLoadType: (
-    chunk: InitialChunkSummary,
-    initialSummary: {
-      initial: { outputs: string[]; totalBytes: number };
-      lazy: { outputs: string[]; totalBytes: number };
-    } | null
-  ) => "initial" | "lazy";
 }
 
 export function DetailsPanel({
@@ -51,10 +44,7 @@ export function DetailsPanel({
   moduleHistory,
   goBackToPreviousModule,
   navigateToModule,
-  getChunkLoadType,
 }: DetailsPanelProps) {
-  const wrappedGetChunkLoadType = (chunk: InitialChunkSummary) =>
-    getChunkLoadType(chunk, initialSummary);
   return (
     <Card className="h-full">
       {selectedModule && (

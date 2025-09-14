@@ -1,5 +1,7 @@
 import type { PathTreeNode } from "./types";
 
+export type { PathTreeNode };
+
 export function findOptimalRoot(
   files: { path: string; size: number }[]
 ): string {

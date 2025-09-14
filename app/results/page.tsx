@@ -9,11 +9,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { inferEntryForOutput, pickInitialOutput } from "@/lib/analyser";
-import {
-  createChunkSummaries,
-  filterChunks,
-  getChunkLoadType,
-} from "@/lib/chunk-utils";
+import { createChunkSummaries, filterChunks } from "@/lib/chunk-utils";
 import { processUploadedFile as processUploadedFileUtil } from "@/lib/file-utils";
 import { usePersistentState } from "@/lib/hooks/use-persistent-state";
 import { summarizeInitial } from "@/lib/initial-summary";
@@ -682,7 +678,6 @@ export default function ResultsPage() {
               moduleHistory={moduleHistory}
               goBackToPreviousModule={goBackToPreviousModule}
               navigateToModule={navigateToModule}
-              getChunkLoadType={getChunkLoadType}
             />
           </ResizablePanel>
         </ResizablePanelGroup>
