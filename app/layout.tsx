@@ -36,18 +36,22 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-
-    <head>
-      {/* eslint-disable-next-line @next/next/no-sync-scripts */}
-      <script
-        crossOrigin="anonymous"
-        src="//unpkg.com/react-scan/dist/auto.global.js"
-      />
-    </head>
+      <head>
+        {process.env.NODE_ENV !== "production" && (
+          <>
+            {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+            <script
+              crossOrigin="anonymous"
+              src="//unpkg.com/react-scan/dist/auto.global.js"
+            />
+          </>
+        )}
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {children}
+
         <Analytics mode="auto" />
       </body>
     </html>
