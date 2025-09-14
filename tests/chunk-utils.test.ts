@@ -60,6 +60,8 @@ describe("createInitialChunkSummary", () => {
     expect(result).toEqual({
       outputFile: "dist/index.js",
       bytes: 100,
+      gzipBytes: 30,
+      brotliBytes: 22,
       entryPoint: "src/index.ts",
       isEntry: true,
       includedInputs: ["src/index.ts"],
@@ -85,6 +87,8 @@ describe("createInitialChunkSummary", () => {
     expect(result).toEqual({
       outputFile: "dist/utils.js",
       bytes: 50,
+      gzipBytes: 15,
+      brotliBytes: 11,
       entryPoint: "",
       isEntry: false,
       includedInputs: ["src/utils.ts"],

@@ -11,6 +11,7 @@ import {
 import { inferEntryForOutput, pickInitialOutput } from "@/lib/analyser";
 import { createChunkSummaries, filterChunks } from "@/lib/chunk-utils";
 import { processUploadedFile as processUploadedFileUtil } from "@/lib/file-utils";
+import { estimateBrotliSize, estimateGzipSize } from "@/lib/format";
 import { usePersistentState } from "@/lib/hooks/use-persistent-state";
 import { summarizeInitial } from "@/lib/initial-summary";
 import { parseMetafile } from "@/lib/metafile";
@@ -251,6 +252,8 @@ export default function ResultsPage() {
               return {
                 outputFile,
                 bytes: out.bytes || 0,
+                gzipBytes: estimateGzipSize(out.bytes || 0),
+                brotliBytes: estimateBrotliSize(out.bytes || 0),
                 entryPoint:
                   out.entryPoint || inferEntryForOutput(mf, outputFile) || "",
                 isEntry: Boolean(out.entryPoint),
@@ -285,6 +288,8 @@ export default function ResultsPage() {
             initialSelected = {
               outputFile: pickedInitial,
               bytes: out.bytes || 0,
+              gzipBytes: estimateGzipSize(out.bytes || 0),
+              brotliBytes: estimateBrotliSize(out.bytes || 0),
               entryPoint:
                 out.entryPoint || inferEntryForOutput(mf, pickedInitial) || "",
               isEntry: Boolean(out.entryPoint),

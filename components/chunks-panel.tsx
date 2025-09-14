@@ -262,8 +262,8 @@ export function ChunksPanel({
                     selectedChunk?.outputFile === c.outputFile
                       ? "bg-accent border-primary ring-1 ring-primary/20 shadow-sm"
                       : isMainEntryChunk
-                      ? "bg-blue-50/50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
-                      : "bg-background border-border hover:border-accent"
+                        ? "bg-blue-50/50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                        : "bg-background border-border hover:border-accent"
                   }`}
                 >
                   <div className="flex items-center gap-2">

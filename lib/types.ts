@@ -56,6 +56,8 @@ export interface Metafile {
 export interface InitialChunkSummary {
   outputFile: string;
   bytes: number;
+  gzipBytes: number;
+  brotliBytes: number;
   entryPoint: string;
   isEntry: boolean;
   includedInputs: string[];
@@ -145,6 +147,8 @@ export interface CreatedChunk {
   outputFile: string;
   entryPoint: string;
   bytes: number;
+  gzipBytes: number;
+  brotliBytes: number;
   includedInputs: string[];
 }
 

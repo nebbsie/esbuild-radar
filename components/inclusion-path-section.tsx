@@ -134,7 +134,7 @@ export function InclusionPathSection({
         {inclusionPath.map((step, idx) => {
           // Find which chunk this file belongs to
           const chunkContainingFile = chunks.find((chunk) =>
-            chunk.includedInputs.includes(step.file)
+            chunk.includedInputs.includes(step.file),
           );
 
           return (
@@ -143,45 +143,48 @@ export function InclusionPathSection({
               className="flex items-start gap-2 p-1.5 rounded-md bg-muted/20"
             >
               <div className="flex-1 min-w-0">
-                <div className="break-all">
-                  <span
-                    className="text-xs font-medium truncate block"
-                    title={step.file}
-                  >
+                <div>
+                  <span className="text-xs font-medium truncate block">
                     {step.file}
                   </span>
                   <div className="flex items-center gap-1 mt-0.5">
                     {step.importerChunkType === "lazy" && (
-                      <span className="text-xs text-purple-600 font-medium">
+                      <span className="text-xs text-purple-600 font-medium whitespace-nowrap">
                         lazy
                       </span>
                     )}
                     {step.isDynamicImport ? (
-                      <span className="text-xs text-purple-600 mr-1">
+                      <span className="text-xs text-purple-600 whitespace-nowrap">
                         lazily imports
                       </span>
                     ) : (
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
                         imports
                       </span>
                     )}
-                    <TooltipProvider delayDuration={300}>
-                      <Tooltip>
+                    <TooltipProvider>
+                      <Tooltip delayDuration={700}>
                         <TooltipTrigger asChild>
-                          <code
-                            className="text-xs bg-muted px-1 py-0.5 rounded font-mono truncate cursor-pointer hover:bg-muted/80"
-                            title={step.importStatement}
-                          >
+                          <code className="text-xs bg-muted px-1 py-0.5 rounded font-mono truncate hover:bg-muted/80">
                             {step.importStatement}
                           </code>
                         </TooltipTrigger>
                         <TooltipContent side="top" className="max-w-xs">
-                          {chunkContainingFile && (
-                            <div className="text-xs">
-                              {chunkContainingFile.outputFile} (
-                              {formatBytes(chunkContainingFile.bytes)})
+                          <div className="text-xs">
+                            <div className="font-medium">
+                              {step.importStatement}
                             </div>
-                          )}
+                            {chunkContainingFile ? (
+                              <div className="text-muted-foreground mt-1">
+                                {chunkContainingFile.outputFile} (
+                                {formatBytes(chunkContainingFile.bytes)})
+                              </div>
+                            ) : (
+                              <div className="text-muted-foreground mt-1">
+                                No chunk information available
+                              </div>
+                            )}
+                          </div>
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
@@ -191,7 +194,7 @@ export function InclusionPathSection({
                       // Find the chunk created by this dynamic import
                       const dynamicImportPath = step.importStatement.replace(
                         /^["']|["']$/g,
-                        ""
+                        "",
                       );
 
                       // Look for chunks that have this path as their entry point or contain files from this path
@@ -199,14 +202,14 @@ export function InclusionPathSection({
                         // Check if this chunk's entry point matches the dynamic import
                         if (
                           chunk.entryPoint.includes(
-                            dynamicImportPath.replace("./", "")
+                            dynamicImportPath.replace("./", ""),
                           )
                         ) {
                           return true;
                         }
                         // Or check if any included input matches the dynamic import path
                         return chunk.includedInputs.some((input) =>
-                          input.includes(dynamicImportPath.replace("./", ""))
+                          input.includes(dynamicImportPath.replace("./", "")),
                         );
                       });
 

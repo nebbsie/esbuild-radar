@@ -1,5 +1,6 @@
 // Bundle analysis helpers used by the UI. Keep UI rendering out of this file.
 
+import { estimateBrotliSize, estimateGzipSize } from "@/lib/format";
 import type {
   ClassifiedChunks,
   ImportKind,
@@ -97,6 +98,8 @@ export function computeAllOutputSummaries(
     all.push({
       outputFile: file,
       bytes: out.bytes || 0,
+      gzipBytes: estimateGzipSize(out.bytes || 0),
+      brotliBytes: estimateBrotliSize(out.bytes || 0),
       entryPoint: out.entryPoint || inferEntryForOutput(meta, file) || "",
       isEntry: Boolean(out.entryPoint),
       includedInputs,
@@ -280,6 +283,8 @@ export function classifyChunksFromInitial(
   const initialChunk: InitialChunkSummary = {
     outputFile: initialOutput,
     bytes: initialOut.bytes || 0,
+    gzipBytes: estimateGzipSize(initialOut.bytes || 0),
+    brotliBytes: estimateBrotliSize(initialOut.bytes || 0),
     entryPoint:
       initialOut.entryPoint || inferEntryForOutput(meta, initialOutput) || "",
     isEntry: Boolean(initialOut.entryPoint),
@@ -306,6 +311,8 @@ export function classifyChunksFromInitial(
     const chunk: InitialChunkSummary = {
       outputFile: output,
       bytes: out.bytes || 0,
+      gzipBytes: estimateGzipSize(out.bytes || 0),
+      brotliBytes: estimateBrotliSize(out.bytes || 0),
       entryPoint: out.entryPoint || inferEntryForOutput(meta, output) || "",
       isEntry: Boolean(out.entryPoint),
       includedInputs: Object.keys(out.inputs || {}),

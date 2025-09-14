@@ -4,7 +4,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { formatBytes } from "@/lib/format";
+import {
+  estimateBrotliSize,
+  estimateGzipSize,
+  formatBytes,
+} from "@/lib/format";
 import type { InitialChunkSummary } from "@/lib/types";
 import { HelpCircle } from "lucide-react";
 
@@ -37,6 +41,16 @@ export const BundleStatsSection = ({
     (total, chunk) => total + (chunk?.bytes || 0),
     0
   );
+  const totalGzipSize = chunks.reduce(
+    (total, chunk) =>
+      total + (chunk?.gzipBytes || estimateGzipSize(chunk?.bytes || 0)),
+    0
+  );
+  const totalBrotliSize = chunks.reduce(
+    (total, chunk) =>
+      total + (chunk?.brotliBytes || estimateBrotliSize(chunk?.bytes || 0)),
+    0
+  );
   const largestChunk =
     chunks.length > 0 ? Math.max(...chunks.map((c) => c?.bytes || 0)) : 0;
   const totalModules = chunks.reduce(
@@ -61,9 +75,24 @@ export const BundleStatsSection = ({
             </div>
             {title}
           </div>
-          <div className={`text-base font-semibold ${textColor}`}>
-            {formatBytes(totalSize)}
-          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div
+                className={`text-base font-semibold ${textColor} cursor-help`}
+              >
+                {formatBytes(totalSize)}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <div className="text-xs">
+                <div>Gzipped: {formatBytes(totalGzipSize)}</div>
+                <div>Brotli: {formatBytes(totalBrotliSize)}</div>
+                <div className="text-muted-foreground mt-1 text-xs">
+                  * Estimates - actual compression may vary
+                </div>
+              </div>
+            </TooltipContent>
+          </Tooltip>
         </div>
         {description && (
           <p className="text-xs text-muted-foreground mb-3 italic">

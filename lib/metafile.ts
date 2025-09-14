@@ -1,3 +1,4 @@
+import { estimateBrotliSize, estimateGzipSize } from "./format";
 import type {
   ImportKind,
   InclusionStep,
@@ -116,6 +117,8 @@ export function getInitialOutputs(meta: Metafile): InitialChunkSummary[] {
     summaries.push({
       outputFile,
       bytes: output.bytes || 0,
+      gzipBytes: estimateGzipSize(output.bytes || 0),
+      brotliBytes: estimateBrotliSize(output.bytes || 0),
       entryPoint:
         output.entryPoint || inferRootEntryFor(meta, outputFile) || "",
       isEntry: Boolean(output.entryPoint),
@@ -162,6 +165,8 @@ export function getInitialOutputsForEntry(
     summaries.push({
       outputFile,
       bytes: output.bytes || 0,
+      gzipBytes: estimateGzipSize(output.bytes || 0),
+      brotliBytes: estimateBrotliSize(output.bytes || 0),
       entryPoint: entryInput,
       isEntry: Boolean(output.entryPoint),
       includedInputs,

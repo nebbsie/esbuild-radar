@@ -1,4 +1,5 @@
 import { inferEntryForOutput } from "@/lib/analyser";
+import { estimateBrotliSize, estimateGzipSize } from "@/lib/format";
 import type {
   InitialChunkSummary,
   Metafile,
@@ -175,6 +176,8 @@ export function createInitialChunkSummary(
   return {
     outputFile,
     bytes: output.bytes || 0,
+    gzipBytes: estimateGzipSize(output.bytes || 0),
+    brotliBytes: estimateBrotliSize(output.bytes || 0),
     entryPoint:
       output.entryPoint || inferEntryForOutput(metafile, outputFile) || "",
     isEntry: Boolean(output.entryPoint),
