@@ -63,7 +63,27 @@ export function selectModule(
   selectedChunk: InitialChunkSummary | null;
   inclusion: InclusionPathResult | null;
 } {
-  // Find the chunk that contains this module
+  // If a specific chunk was provided and it contains this module, use it
+  if (selectedChunk && selectedChunk.includedInputs.includes(modulePath)) {
+    // Use the provided chunk if it contains the module
+    const newSelectedChunk = selectedChunk;
+
+    // Calculate inclusion path
+    const rootEntry = initialChunk?.entryPoint || newSelectedChunk?.entryPoint;
+
+    const inclusion =
+      metafile && rootEntry
+        ? calculateInclusionPath(metafile, modulePath, rootEntry)
+        : null;
+
+    return {
+      selectedModule: modulePath,
+      selectedChunk: newSelectedChunk,
+      inclusion,
+    };
+  }
+
+  // Otherwise, find the chunk that contains this module
   const chunkContainingModule = chunks.find((chunk) =>
     chunk.includedInputs.includes(modulePath)
   );

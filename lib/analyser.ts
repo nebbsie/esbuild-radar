@@ -538,6 +538,7 @@ export function getImportSources(
 export interface DynamicCreatedChunk {
   chunk: InitialChunkSummary;
   dynamicImportPath: string;
+  importStatement: string;
 }
 
 export function getChunksCreatedByFile(
@@ -561,6 +562,8 @@ export function getChunksCreatedByFile(
   for (const dynamicImport of dynamicImports) {
     // Clean up the import path
     const importPath = dynamicImport.path.replace(/^["']|["']$/g, "");
+    // Get the original import statement (with import() wrapper if it's dynamic)
+    const importStatement = dynamicImport.original || dynamicImport.path;
 
     // Find chunks that this dynamic import likely created
     const matchingChunks = chunks.filter((chunk) => {
@@ -580,6 +583,7 @@ export function getChunksCreatedByFile(
       createdChunks.push({
         chunk,
         dynamicImportPath: importPath,
+        importStatement,
       });
     }
   }

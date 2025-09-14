@@ -144,15 +144,19 @@ export function FilesPanel({
                   // Show files from the selected chunk
                   const output = metafile.outputs[selectedChunk.outputFile];
                   const inputsMap = output?.inputs || {};
+
                   files = (selectedChunk.includedInputs || [])
                     .filter((p) => showNodeModules || !/node_modules/.test(p))
-                    .map((p) => ({
-                      path: p,
-                      size:
+                    .map((p) => {
+                      const size =
                         (inputsMap[p]?.bytesInOutput as number | undefined) ||
                         (inputsMap[p]?.bytes as number | undefined) ||
-                        0,
-                    }));
+                        0;
+                      return {
+                        path: p,
+                        size,
+                      };
+                    });
                 } else {
                   // Show all files from the metafile when no chunk is selected
                   files = metafile

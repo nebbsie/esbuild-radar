@@ -5,10 +5,10 @@
  */
 
 /**
- * Converts a raw byte count into a human-readable string using binary (base-1024) units.
+ * Converts a raw byte count into a human-readable string using decimal (base-1000) units.
  *
- * The algorithm progressively divides the input value by 1024 until it finds the
- * most appropriate unit ( B , KB , MB or GB ).  Decimal precision is kept low to
+ * The algorithm progressively divides the input value by 1000 until it finds the
+ * most appropriate unit ( B , KB , MB or GB ). Decimal precision is kept low to
  * ensure stable display in UI components:
  *
  * • Bytes ( B ) and Kilobytes ( KB ) are rounded to the nearest whole number
@@ -20,13 +20,13 @@
  *
  * @example
  * ```ts
- * formatBytes(0);          // "0 B"
- * formatBytes(1023);       // "1023 B"
- * formatBytes(10_240);     // "10 KB"
- * formatBytes(10_485_760); // "10.00 MB"
+ * formatBytes(0);           // "0 B"
+ * formatBytes(999);         // "999 B"
+ * formatBytes(10_000);      // "10 KB"
+ * formatBytes(10_000_000);  // "10.00 MB"
  * ```
  *
- * @param bytes – Raw byte count, must be non-negative.  Values outside the safe
+ * @param bytes – Raw byte count, must be non-negative. Values outside the safe
  *        integer range are clamped by JavaScript’s numeric limits.
  * @returns Human-friendly string representation such as "1.234 MB".
  */
@@ -39,8 +39,8 @@ export function formatBytes(bytes: number): string {
 
   // Climb the unit ladder while we still have a bigger unit available
   // and the current value is large enough to justify the switch.
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
+  while (value >= 1000 && unitIndex < units.length - 1) {
+    value /= 1000;
     unitIndex++;
   }
 

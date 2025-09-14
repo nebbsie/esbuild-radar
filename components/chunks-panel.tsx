@@ -25,6 +25,7 @@ import type {
   Metafile,
 } from "@/lib/types";
 import { Clock, Filter, Search, Upload, X, Zap } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface ChunksPanelProps {
   metafile: Metafile;
@@ -51,7 +52,6 @@ interface ChunksPanelProps {
   setSelectedModule: (module: string | null) => void;
   setSelectedChunk: (chunk: InitialChunkSummary | null) => void;
   setInclusion: (inclusion: InclusionPathResult | null) => void;
-  handleFileUpload: () => void;
 }
 
 export function ChunksPanel({
@@ -73,8 +73,8 @@ export function ChunksPanel({
   setSelectedModule,
   setSelectedChunk,
   setInclusion,
-  handleFileUpload,
 }: ChunksPanelProps) {
+  const router = useRouter();
   return (
     <Card className="h-full">
       <CardHeader>
@@ -89,7 +89,7 @@ export function ChunksPanel({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleFileUpload}
+                  onClick={() => router.push("/upload")}
                   className="p-2 cursor-pointer"
                 >
                   <Upload className="h-4 w-4" />

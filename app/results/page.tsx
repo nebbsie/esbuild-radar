@@ -28,6 +28,7 @@ import type {
   Metafile,
   ProcessedMetafileData,
 } from "@/lib/types";
+import { Loader2 } from "lucide-react";
 // Icons are now imported in individual components
 import { useRouter } from "next/navigation";
 import * as React from "react";
@@ -521,7 +522,18 @@ export default function ResultsPage() {
   );
 
   // Auto-select chunk if search results in single match
+  // But don't override manual navigation to modules in filtered chunks
   React.useEffect(() => {
+    // Don't auto-select if the current selectedChunk is not in filteredChunks
+    // This prevents overriding manual navigation to filtered chunks
+    const currentChunkIsFiltered =
+      selectedChunk && filteredChunks.includes(selectedChunk);
+
+    if (!currentChunkIsFiltered && selectedChunk) {
+      // Current selection is in a filtered chunk, don't auto-change it
+      return;
+    }
+
     const { selectedModule: newModule, selectedChunk: newChunk } =
       determineModuleSelectionForChunkChange(
         filteredChunks,
@@ -557,7 +569,13 @@ export default function ResultsPage() {
   }, [chunkSearch]);
 
   if (!metafile) {
-    return <div>Loading...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin  text-primary" />
+        </div>
+      </div>
+    );
   }
 
   async function clearData() {
@@ -568,10 +586,6 @@ export default function ResultsPage() {
     setSelectedModule(null);
     setInclusion(null);
     setMetafileName("");
-  }
-
-  function handleFileUpload() {
-    fileInputRef.current?.click();
   }
 
   async function processUploadedFile(file: File) {
@@ -648,7 +662,6 @@ export default function ResultsPage() {
               setSelectedModule={setSelectedModule}
               setSelectedChunk={setSelectedChunk}
               setInclusion={setInclusion}
-              handleFileUpload={handleFileUpload}
             />
           </ResizablePanel>
 

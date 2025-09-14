@@ -155,6 +155,7 @@ export interface CreatedChunk {
 export interface DynamicCreatedChunk {
   chunk: InitialChunkSummary;
   dynamicImportPath: string;
+  importStatement: string;
 }
 
 // =====================================

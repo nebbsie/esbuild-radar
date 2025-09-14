@@ -6309,8 +6309,8 @@
       ],
       "format": "esm"
     },
-    "src/app/eager1/eager1.ts": {
-      "bytes": 733,
+    "src/app/imported-twice/imported-twice.ts": {
+      "bytes": 814,
       "imports": [
         {
           "path": "@angular/core",
@@ -6325,8 +6325,29 @@
       ],
       "format": "esm"
     },
+    "src/app/eager1/eager1.ts": {
+      "bytes": 756,
+      "imports": [
+        {
+          "path": "@angular/core",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/app/imported-twice/imported-twice.ts",
+          "kind": "import-statement",
+          "original": "../imported-twice/imported-twice"
+        },
+        {
+          "path": "node_modules/.pnpm/@angular+core@20.3.0_@angular+compiler@20.3.0_rxjs@7.8.2/node_modules/@angular/core/fesm2022/core.mjs",
+          "kind": "import-statement",
+          "original": "@angular/core"
+        }
+      ],
+      "format": "esm"
+    },
     "src/app/lazy1/lazy1.ts": {
-      "bytes": 722,
+      "bytes": 719,
       "imports": [
         {
           "path": "@angular/core",
@@ -6342,10 +6363,104 @@
       "format": "esm"
     },
     "src/app/lazy2/lazy2.ts": {
-      "bytes": 722,
+      "bytes": 746,
       "imports": [
         {
           "path": "@angular/core",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/app/imported-twice/imported-twice.ts",
+          "kind": "import-statement",
+          "original": "../imported-twice/imported-twice"
+        },
+        {
+          "path": "node_modules/.pnpm/@angular+core@20.3.0_@angular+compiler@20.3.0_rxjs@7.8.2/node_modules/@angular/core/fesm2022/core.mjs",
+          "kind": "import-statement",
+          "original": "@angular/core"
+        }
+      ],
+      "format": "esm"
+    },
+    "../node_modules/moment/moment.js": {
+      "bytes": 146013,
+      "imports": [
+        {
+          "path": "<runtime>",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "cjs"
+    },
+    "../node_modules/moment/min/locales.js": {
+      "bytes": 371947,
+      "imports": [
+        {
+          "path": "../node_modules/moment/moment.js",
+          "kind": "require-call",
+          "original": "../moment"
+        },
+        {
+          "path": "<runtime>",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "cjs"
+    },
+    "src/app/lazy3/lazy3.ts": {
+      "bytes": 1112,
+      "imports": [
+        {
+          "path": "@angular/core",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../node_modules/moment/moment.js",
+          "kind": "import-statement",
+          "original": "moment"
+        },
+        {
+          "path": "../node_modules/moment/min/locales.js",
+          "kind": "import-statement",
+          "original": "moment/min/locales"
+        },
+        {
+          "path": "src/app/imported-twice/imported-twice.ts",
+          "kind": "import-statement",
+          "original": "../imported-twice/imported-twice"
+        },
+        {
+          "path": "node_modules/.pnpm/@angular+core@20.3.0_@angular+compiler@20.3.0_rxjs@7.8.2/node_modules/@angular/core/fesm2022/core.mjs",
+          "kind": "import-statement",
+          "original": "@angular/core"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/app/ui-module.ts": {
+      "bytes": 583,
+      "imports": [
+        {
+          "path": "@angular/core",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "node_modules/.pnpm/@angular+common@20.3.0_@angular+core@20.3.0_@angular+compiler@20.3.0_rxjs@7.8.2__rxjs@7.8.2/node_modules/@angular/common/fesm2022/common.mjs",
+          "kind": "import-statement",
+          "original": "@angular/common"
+        },
+        {
+          "path": "./test-components/test-large-component",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "./test-components/test-small-component",
           "kind": "import-statement",
           "external": true
         },
@@ -6357,8 +6472,8 @@
       ],
       "format": "esm"
     },
-    "src/app/lazy3/lazy3.ts": {
-      "bytes": 722,
+    "src/app/test-components/test-large-component.ts": {
+      "bytes": 1121,
       "imports": [
         {
           "path": "@angular/core",
@@ -6366,15 +6481,51 @@
           "external": true
         },
         {
+          "path": "../node_modules/moment/moment.js",
+          "kind": "import-statement",
+          "original": "moment"
+        },
+        {
+          "path": "../node_modules/moment/min/locales.js",
+          "kind": "import-statement",
+          "original": "moment/min/locales"
+        },
+        {
           "path": "node_modules/.pnpm/@angular+core@20.3.0_@angular+compiler@20.3.0_rxjs@7.8.2/node_modules/@angular/core/fesm2022/core.mjs",
           "kind": "import-statement",
           "original": "@angular/core"
+        }
+      ],
+      "format": "esm"
+    },
+    "src/app/test-importing-standalone-from-modules/test-importing-standalone-from-modules.ts": {
+      "bytes": 1109,
+      "imports": [
+        {
+          "path": "@angular/core",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "src/app/ui-module.ts",
+          "kind": "import-statement",
+          "original": "../ui-module"
+        },
+        {
+          "path": "node_modules/.pnpm/@angular+core@20.3.0_@angular+compiler@20.3.0_rxjs@7.8.2/node_modules/@angular/core/fesm2022/core.mjs",
+          "kind": "import-statement",
+          "original": "@angular/core"
+        },
+        {
+          "path": "src/app/test-components/test-large-component.ts",
+          "kind": "import-statement",
+          "original": "../test-components/test-large-component"
         }
       ],
       "format": "esm"
     },
     "src/app/app.routes.ts": {
-      "bytes": 460,
+      "bytes": 684,
       "imports": [
         {
           "path": "@angular/router",
@@ -6400,12 +6551,17 @@
           "path": "src/app/lazy3/lazy3.ts",
           "kind": "dynamic-import",
           "original": "./lazy3/lazy3"
+        },
+        {
+          "path": "src/app/test-importing-standalone-from-modules/test-importing-standalone-from-modules.ts",
+          "kind": "dynamic-import",
+          "original": "./test-importing-standalone-from-modules/test-importing-standalone-from-modules"
         }
       ],
       "format": "esm"
     },
     "src/app/app.config.ts": {
-      "bytes": 383,
+      "bytes": 392,
       "imports": [
         {
           "path": "node_modules/.pnpm/@angular+core@20.3.0_@angular+compiler@20.3.0_rxjs@7.8.2/node_modules/@angular/core/fesm2022/core.mjs",
@@ -6483,48 +6639,51 @@
     }
   },
   "outputs": {
-    "main-Q7Q53UHO.js": {
+    "main-65XUKRW2.js": {
       "imports": [
         {
-          "path": "chunk-HYIVOVME.js",
+          "path": "chunk-AJDADYW2.js",
           "kind": "import-statement"
         },
         {
-          "path": "chunk-WYVP2QRY.js",
+          "path": "chunk-D22UKKAI.js",
+          "kind": "import-statement"
+        },
+        {
+          "path": "chunk-YAWZY2LF.js",
+          "kind": "import-statement"
+        },
+        {
+          "path": "chunk-ZOEV2OQC.js",
           "kind": "dynamic-import"
         },
         {
-          "path": "chunk-EIVQD72L.js",
+          "path": "chunk-OHDRARJM.js",
           "kind": "dynamic-import"
         },
         {
-          "path": "chunk-KXHLDVJJ.js",
+          "path": "chunk-OCZDGOFR.js",
+          "kind": "dynamic-import"
+        },
+        {
+          "path": "chunk-DOTKISGB.js",
           "kind": "dynamic-import"
         }
       ],
       "exports": [],
       "entryPoint": "src/main.ts",
       "inputs": {
-        "node_modules/.pnpm/@angular+common@20.3.0_@angular+core@20.3.0_@angular+compiler@20.3.0_rxjs@7.8.2__rxjs@7.8.2/node_modules/@angular/common/fesm2022/location.mjs": {
-          "bytesInOutput": 5308
-        },
-        "node_modules/.pnpm/@angular+common@20.3.0_@angular+core@20.3.0_@angular+compiler@20.3.0_rxjs@7.8.2__rxjs@7.8.2/node_modules/@angular/common/fesm2022/common.mjs": {
-          "bytesInOutput": 17
-        },
-        "node_modules/.pnpm/@angular+common@20.3.0_@angular+core@20.3.0_@angular+compiler@20.3.0_rxjs@7.8.2__rxjs@7.8.2/node_modules/@angular/common/fesm2022/xhr.mjs": {
-          "bytesInOutput": 208
-        },
         "node_modules/.pnpm/@angular+platform-browser@20.3.0_@angular+common@20.3.0_@angular+core@20.3.0_@angular+c_9a2b1f96efa9a5710906ca067ab1ffb8/node_modules/@angular/platform-browser/fesm2022/dom_renderer.mjs": {
-          "bytesInOutput": 8499
+          "bytesInOutput": 8500
         },
         "node_modules/.pnpm/@angular+platform-browser@20.3.0_@angular+common@20.3.0_@angular+core@20.3.0_@angular+c_9a2b1f96efa9a5710906ca067ab1ffb8/node_modules/@angular/platform-browser/fesm2022/browser.mjs": {
-          "bytesInOutput": 3572
+          "bytesInOutput": 3573
         },
         "node_modules/.pnpm/@angular+platform-browser@20.3.0_@angular+common@20.3.0_@angular+core@20.3.0_@angular+c_9a2b1f96efa9a5710906ca067ab1ffb8/node_modules/@angular/platform-browser/fesm2022/platform-browser.mjs": {
           "bytesInOutput": 256
         },
         "node_modules/.pnpm/@angular+router@20.3.0_@angular+common@20.3.0_@angular+core@20.3.0_@angular+compiler@20_a6adaa30a584317497956357ad6c0044/node_modules/@angular/router/fesm2022/router2.mjs": {
-          "bytesInOutput": 64868
+          "bytesInOutput": 64859
         },
         "node_modules/.pnpm/@angular+router@20.3.0_@angular+common@20.3.0_@angular+core@20.3.0_@angular+compiler@20_a6adaa30a584317497956357ad6c0044/node_modules/@angular/router/fesm2022/router.mjs": {
           "bytesInOutput": 0
@@ -6533,27 +6692,27 @@
           "bytesInOutput": 4167
         },
         "src/app/eager1/eager1.ts": {
-          "bytesInOutput": 221
+          "bytesInOutput": 224
         },
         "src/app/app.routes.ts": {
-          "bytesInOutput": 278
+          "bytesInOutput": 386
         },
         "src/app/app.config.ts": {
           "bytesInOutput": 38
         },
         "src/app/app.ts": {
-          "bytesInOutput": 494
+          "bytesInOutput": 491
         },
         "src/main.ts": {
           "bytesInOutput": 37
         }
       },
-      "bytes": 88805
+      "bytes": 83496
     },
-    "chunk-WYVP2QRY.js": {
+    "chunk-ZOEV2OQC.js": {
       "imports": [
         {
-          "path": "chunk-HYIVOVME.js",
+          "path": "chunk-YAWZY2LF.js",
           "kind": "import-statement"
         }
       ],
@@ -6563,15 +6722,19 @@
       "entryPoint": "src/app/lazy1/lazy1.ts",
       "inputs": {
         "src/app/lazy1/lazy1.ts": {
-          "bytesInOutput": 214
+          "bytesInOutput": 212
         }
       },
-      "bytes": 299
+      "bytes": 297
     },
-    "chunk-EIVQD72L.js": {
+    "chunk-OHDRARJM.js": {
       "imports": [
         {
-          "path": "chunk-HYIVOVME.js",
+          "path": "chunk-AJDADYW2.js",
+          "kind": "import-statement"
+        },
+        {
+          "path": "chunk-YAWZY2LF.js",
           "kind": "import-statement"
         }
       ],
@@ -6581,15 +6744,23 @@
       "entryPoint": "src/app/lazy2/lazy2.ts",
       "inputs": {
         "src/app/lazy2/lazy2.ts": {
-          "bytesInOutput": 214
+          "bytesInOutput": 220
         }
       },
-      "bytes": 299
+      "bytes": 329
     },
-    "chunk-KXHLDVJJ.js": {
+    "chunk-OCZDGOFR.js": {
       "imports": [
         {
-          "path": "chunk-HYIVOVME.js",
+          "path": "chunk-AJDADYW2.js",
+          "kind": "import-statement"
+        },
+        {
+          "path": "chunk-4FFIYNLK.js",
+          "kind": "import-statement"
+        },
+        {
+          "path": "chunk-YAWZY2LF.js",
           "kind": "import-statement"
         }
       ],
@@ -6599,12 +6770,116 @@
       "entryPoint": "src/app/lazy3/lazy3.ts",
       "inputs": {
         "src/app/lazy3/lazy3.ts": {
-          "bytesInOutput": 214
+          "bytesInOutput": 325
         }
       },
-      "bytes": 299
+      "bytes": 528
     },
-    "chunk-HYIVOVME.js": {
+    "chunk-AJDADYW2.js": {
+      "imports": [
+        {
+          "path": "chunk-YAWZY2LF.js",
+          "kind": "import-statement"
+        }
+      ],
+      "exports": [
+        "a"
+      ],
+      "inputs": {
+        "src/app/imported-twice/imported-twice.ts": {
+          "bytesInOutput": 232
+        }
+      },
+      "bytes": 313
+    },
+    "chunk-DOTKISGB.js": {
+      "imports": [
+        {
+          "path": "chunk-D22UKKAI.js",
+          "kind": "import-statement"
+        },
+        {
+          "path": "chunk-4FFIYNLK.js",
+          "kind": "import-statement"
+        },
+        {
+          "path": "chunk-YAWZY2LF.js",
+          "kind": "import-statement"
+        }
+      ],
+      "exports": [
+        "TestImportingStandaloneFromModules"
+      ],
+      "entryPoint": "src/app/test-importing-standalone-from-modules/test-importing-standalone-from-modules.ts",
+      "inputs": {
+        "src/app/ui-module.ts": {
+          "bytesInOutput": 125
+        },
+        "src/app/test-components/test-large-component.ts": {
+          "bytesInOutput": 320
+        },
+        "src/app/test-importing-standalone-from-modules/test-importing-standalone-from-modules.ts": {
+          "bytesInOutput": 261
+        }
+      },
+      "bytes": 953
+    },
+    "chunk-D22UKKAI.js": {
+      "imports": [
+        {
+          "path": "chunk-YAWZY2LF.js",
+          "kind": "import-statement"
+        }
+      ],
+      "exports": [
+        "a",
+        "b",
+        "c",
+        "d",
+        "e",
+        "f",
+        "g",
+        "h",
+        "i"
+      ],
+      "inputs": {
+        "node_modules/.pnpm/@angular+common@20.3.0_@angular+core@20.3.0_@angular+compiler@20.3.0_rxjs@7.8.2__rxjs@7.8.2/node_modules/@angular/common/fesm2022/location.mjs": {
+          "bytesInOutput": 5273
+        },
+        "node_modules/.pnpm/@angular+common@20.3.0_@angular+core@20.3.0_@angular+compiler@20.3.0_rxjs@7.8.2__rxjs@7.8.2/node_modules/@angular/common/fesm2022/common_module.mjs": {
+          "bytesInOutput": 132
+        },
+        "node_modules/.pnpm/@angular+common@20.3.0_@angular+core@20.3.0_@angular+compiler@20.3.0_rxjs@7.8.2__rxjs@7.8.2/node_modules/@angular/common/fesm2022/xhr.mjs": {
+          "bytesInOutput": 206
+        },
+        "node_modules/.pnpm/@angular+common@20.3.0_@angular+core@20.3.0_@angular+compiler@20.3.0_rxjs@7.8.2__rxjs@7.8.2/node_modules/@angular/common/fesm2022/common.mjs": {
+          "bytesInOutput": 17
+        }
+      },
+      "bytes": 5791
+    },
+    "chunk-4FFIYNLK.js": {
+      "imports": [
+        {
+          "path": "chunk-YAWZY2LF.js",
+          "kind": "import-statement"
+        }
+      ],
+      "exports": [
+        "a",
+        "b"
+      ],
+      "inputs": {
+        "../node_modules/moment/moment.js": {
+          "bytesInOutput": 60952
+        },
+        "../node_modules/moment/min/locales.js": {
+          "bytesInOutput": 310512
+        }
+      },
+      "bytes": 371538
+    },
+    "chunk-YAWZY2LF.js": {
       "imports": [],
       "exports": [
         "$",
@@ -6645,12 +6920,19 @@
         "R",
         "Ra",
         "S",
+        "Sa",
         "T",
+        "Ta",
         "U",
+        "Ua",
         "V",
+        "Va",
         "W",
+        "Wa",
         "X",
+        "Xa",
         "Y",
+        "Ya",
         "Z",
         "_",
         "a",
@@ -6960,13 +7242,13 @@
           "bytesInOutput": 0
         },
         "node_modules/.pnpm/@angular+core@20.3.0_@angular+compiler@20.3.0_rxjs@7.8.2/node_modules/@angular/core/fesm2022/root_effect_scheduler.mjs": {
-          "bytesInOutput": 17535
+          "bytesInOutput": 17639
         },
         "node_modules/.pnpm/rxjs@7.8.2/node_modules/rxjs/dist/esm/operators/index.js": {
           "bytesInOutput": 0
         },
         "node_modules/.pnpm/@angular+core@20.3.0_@angular+compiler@20.3.0_rxjs@7.8.2/node_modules/@angular/core/fesm2022/debug_node.mjs": {
-          "bytesInOutput": 63117
+          "bytesInOutput": 63584
         },
         "node_modules/.pnpm/@angular+core@20.3.0_@angular+compiler@20.3.0_rxjs@7.8.2/node_modules/@angular/core/fesm2022/core.mjs": {
           "bytesInOutput": 2843
@@ -6975,7 +7257,7 @@
           "bytesInOutput": 100
         }
       },
-      "bytes": 107474
+      "bytes": 108808
     },
     "styles-5INURTSO.css": {
       "imports": [],

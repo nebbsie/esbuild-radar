@@ -7,11 +7,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { getInclusionPath } from "@/lib/analyser";
+import { getImportSources, getInclusionPath } from "@/lib/analyser";
 import { getChunkLoadType } from "@/lib/chunk-utils";
 import { formatBytes } from "@/lib/format";
 import type { InitialChunkSummary, Metafile } from "@/lib/types";
-import { HelpCircle } from "lucide-react";
+import { CornerDownRight, HelpCircle } from "lucide-react";
+import { useEffect, useState } from "react";
 
 interface InclusionPathSectionProps {
   metafile: Metafile;
@@ -38,6 +39,59 @@ export function InclusionPathSection({
     ? getInclusionPath(metafile, selectedModule, chunks)
     : [];
 
+  // Get import sources to check if corresponding importers exist
+  const importSources = selectedModule
+    ? getImportSources(
+        metafile,
+        selectedModule,
+        chunks,
+        initialSummary?.initial.outputs || []
+      )
+    : [];
+
+  // Create a set of importer paths for quick lookup
+  const importerPaths = new Set(importSources.map((source) => source.importer));
+
+  // Listen for hover coming from ImportedBySection to highlight matching row
+  const [importedByHoverPath, setImportedByHoverPath] = useState<string | null>(
+    null
+  );
+  const [inclusionHoverPath, setInclusionHoverPath] = useState<string | null>(
+    null
+  );
+
+  useEffect(() => {
+    const importedByHandler = (e: Event) => {
+      const ce = e as CustomEvent<{ path: string | null }>;
+      setImportedByHoverPath(ce.detail?.path || null);
+    };
+
+    const inclusionHandler = (e: Event) => {
+      const ce = e as CustomEvent<{ path: string | null }>;
+      setInclusionHoverPath(ce.detail?.path || null);
+    };
+
+    window.addEventListener(
+      "imported-by-hover",
+      importedByHandler as EventListener
+    );
+    window.addEventListener(
+      "inclusion-path-hover",
+      inclusionHandler as EventListener
+    );
+
+    return () => {
+      window.removeEventListener(
+        "imported-by-hover",
+        importedByHandler as EventListener
+      );
+      window.removeEventListener(
+        "inclusion-path-hover",
+        inclusionHandler as EventListener
+      );
+    };
+  }, []);
+
   // Check if this module is the entry point of the MAIN APPLICATION bundle
   const isMainEntryPoint = selectedModule === initialChunk?.entryPoint;
 
@@ -50,7 +104,7 @@ export function InclusionPathSection({
     return (
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <TooltipProvider delayDuration={300}>
+          <TooltipProvider delayDuration={600}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <ChunkTypeIcon type="main-entry" size={14} />
@@ -82,7 +136,7 @@ export function InclusionPathSection({
     return (
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <TooltipProvider delayDuration={300}>
+          <TooltipProvider delayDuration={600}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <ChunkTypeIcon type={iconType} size={14} />
@@ -130,42 +184,170 @@ export function InclusionPathSection({
           </Tooltip>
         </TooltipProvider>
       </h4>
-      <div className="space-y-2">
+
+      <ol className="space-y-2">
         {inclusionPath.map((step, idx) => {
-          // Find which chunk this file belongs to
+          // No hidden steps; always render the full path
+
           const chunkContainingFile = chunks.find((chunk) =>
             chunk.includedInputs.includes(step.file)
           );
+          // Try to resolve the imported module path for this step (to compute size delta)
+          const importerInput = metafile.inputs[step.file];
+          const matchedEdge = importerInput?.imports?.find(
+            (imp) => (imp.original || imp.path) === step.importStatement
+          );
+          const importedInputPath = matchedEdge?.path;
+          const rawImportText = step.importStatement.replace(
+            /^(["'])|(["'])$/g,
+            ""
+          );
+          const lookupPath = importedInputPath || rawImportText;
+          const normalizedImported = lookupPath
+            ? lookupPath.replace(/^\.\/+/, "")
+            : undefined;
+          const chunkForImported = lookupPath
+            ? chunks.find((chunk) =>
+                chunk.includedInputs.some(
+                  (p) =>
+                    p === lookupPath ||
+                    (normalizedImported
+                      ? p.includes(normalizedImported)
+                      : false)
+                )
+              )
+            : null;
+          // Reuse indicator removed per UX: we'll highlight in ImportedBySection on hover instead
+          const importedInputSize = (() => {
+            if (!lookupPath || !chunkForImported) return 0;
+            const out = metafile.outputs[chunkForImported.outputFile];
+            const info =
+              out?.inputs?.[lookupPath] ||
+              (normalizedImported
+                ? Object.entries(out?.inputs || {}).find(
+                    ([p]) => p === lookupPath || p.includes(normalizedImported)
+                  )?.[1]
+                : undefined);
+            return (
+              (info?.bytesInOutput as number | undefined) ||
+              (info?.bytes as number | undefined) ||
+              0
+            );
+          })();
+          const firstLazyIndex = inclusionPath.findIndex(
+            (s) => s.importerChunkType === "lazy"
+          );
+          const isFirstLazyBoundary =
+            idx === firstLazyIndex && firstLazyIndex !== -1;
 
+          // Determine created chunk for dynamic imports to show inline icon + tooltip
+          const createdChunk = step.isDynamicImport
+            ? (() => {
+                const dynamicImportPath = step.importStatement.replace(
+                  /^["']|["']$/g,
+                  ""
+                );
+                return (
+                  chunks.find((chunk) =>
+                    chunk.entryPoint.includes(
+                      dynamicImportPath.replace("./", "")
+                    )
+                  ) ||
+                  chunks.find((chunk) =>
+                    chunk.includedInputs.some((input) =>
+                      input.includes(dynamicImportPath.replace("./", ""))
+                    )
+                  ) ||
+                  null
+                );
+              })()
+            : null;
+
+          const isHighlightedByImported =
+            importedByHoverPath === step.file && importerPaths.has(step.file);
+          const isHighlightedByInclusion =
+            inclusionHoverPath === step.file && importerPaths.has(step.file);
+          const isHighlighted =
+            isHighlightedByImported || isHighlightedByInclusion;
           return (
-            <div
+            <li
               key={idx}
-              className="flex items-start gap-2 p-1.5 rounded-md bg-muted/20"
+              className={`py-1 px-2 rounded-md border cursor-pointer transition-colors ${
+                isHighlighted
+                  ? "bg-yellow-50 border-yellow-300"
+                  : "bg-muted/20 border-transparent hover:bg-muted/30"
+              }`}
+              onMouseEnter={() => {
+                const evt = new CustomEvent("inclusion-path-hover", {
+                  detail: { path: step.file },
+                });
+                window.dispatchEvent(evt);
+              }}
+              onMouseLeave={() => {
+                const evt = new CustomEvent("inclusion-path-hover", {
+                  detail: { path: null },
+                });
+                window.dispatchEvent(evt);
+              }}
             >
-              <div className="flex-1 min-w-0">
-                <div>
-                  <span className="text-xs font-medium truncate block">
-                    {step.file}
-                  </span>
-                  <div className="flex items-center gap-1 mt-0.5">
-                    {step.importerChunkType === "lazy" && (
-                      <span className="text-xs text-purple-600 font-medium whitespace-nowrap">
-                        lazy
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="text-xs font-medium flex items-center gap-2 min-w-0">
+                      <span className="text-muted-foreground shrink-0">
+                        {idx + 1}.
                       </span>
-                    )}
+                      <div className="shrink-0">
+                        <ChunkTypeIcon
+                          type={
+                            step.importerChunkType === "lazy"
+                              ? "lazy"
+                              : "initial"
+                          }
+                          variant="swatch"
+                        />
+                      </div>
+                      <span className="truncate min-w-0 overflow-hidden">
+                        {step.file}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 mt-1">
                     {step.isDynamicImport ? (
-                      <span className="text-xs text-purple-600 whitespace-nowrap">
-                        lazily imports
+                      <span className="text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1">
+                        <CornerDownRight size={12} />
+                        imports
                       </span>
                     ) : (
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        imports
+                      <span className="text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1">
+                        <CornerDownRight size={12} /> imports
                       </span>
                     )}
                     <TooltipProvider>
-                      <Tooltip delayDuration={700}>
+                      <Tooltip delayDuration={600}>
                         <TooltipTrigger asChild>
-                          <code className="text-xs bg-muted px-1 py-0.5 rounded font-mono truncate hover:bg-muted/80">
+                          <code
+                            className="text-xs bg-muted px-1 py-0.5 rounded font-mono truncate hover:bg-muted/80 imported-path-item"
+                            data-path={step.file}
+                            onMouseEnter={() => {
+                              const evt = new CustomEvent(
+                                "inclusion-path-hover",
+                                {
+                                  detail: { path: step.file },
+                                }
+                              );
+                              window.dispatchEvent(evt);
+                            }}
+                            onMouseLeave={() => {
+                              const evt = new CustomEvent(
+                                "inclusion-path-hover",
+                                {
+                                  detail: { path: null },
+                                }
+                              );
+                              window.dispatchEvent(evt);
+                            }}
+                          >
                             {step.importStatement}
                           </code>
                         </TooltipTrigger>
@@ -188,49 +370,110 @@ export function InclusionPathSection({
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
-                  </div>
-                  {step.isDynamicImport &&
-                    (() => {
-                      // Find the chunk created by this dynamic import
-                      const dynamicImportPath = step.importStatement.replace(
-                        /^["']|["']$/g,
-                        ""
-                      );
 
-                      // Look for chunks that have this path as their entry point or contain files from this path
-                      const createdChunk = chunks.find((chunk) => {
-                        // Check if this chunk's entry point matches the dynamic import
-                        if (
-                          chunk.entryPoint.includes(
-                            dynamicImportPath.replace("./", "")
-                          )
-                        ) {
-                          return true;
-                        }
-                        // Or check if any included input matches the dynamic import path
-                        return chunk.includedInputs.some((input) =>
-                          input.includes(dynamicImportPath.replace("./", ""))
-                        );
-                      });
-
-                      return (
-                        <div className="text-xs text-purple-600 mt-0.5">
-                          ⚡ Creates lazy-loaded module
-                          {createdChunk && (
-                            <span className="ml-1">
-                              ({createdChunk.outputFile} -{" "}
-                              {formatBytes(createdChunk.bytes)})
+                    {createdChunk && (
+                      <TooltipProvider>
+                        <Tooltip delayDuration={600}>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex items-center">
+                              <ChunkTypeIcon
+                                type="created"
+                                compact
+                                variant="icon"
+                                size={10}
+                                className="rounded-xs"
+                              />
                             </span>
-                          )}
-                        </div>
-                      );
-                    })()}
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="text-xs">
+                              This dynamic import created a lazy-loaded chunk
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {" "}
+                              {createdChunk && (
+                                <span>
+                                  {` (${createdChunk.outputFile} - ${formatBytes(createdChunk.bytes)})`}
+                                </span>
+                              )}
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+
+                    {importedInputPath && (
+                      <TooltipProvider>
+                        <Tooltip delayDuration={600}>
+                          <TooltipTrigger asChild>
+                            <span className="ml-1 text-[10px] text-muted-foreground whitespace-nowrap cursor-help">
+                              +{formatBytes(importedInputSize)}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <div className="text-xs text-muted-foreground">
+                              {step.importerChunkType === "initial"
+                                ? `adds ~${formatBytes(importedInputSize)} to initial`
+                                : `defers ~${formatBytes(importedInputSize)} to lazy`}
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                    {/* Reuse badge removed; hover will cross-highlight in ImportedBySection */}
+                  </div>
+
+                  {/* Inline created module icon is rendered next to the label above */}
                 </div>
+                {isFirstLazyBoundary && (
+                  <TooltipProvider>
+                    <Tooltip delayDuration={600}>
+                      <TooltipTrigger asChild>
+                        <span className="ml-2 shrink-0 text-[10px] leading-none px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-200">
+                          First lazy boundary
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-sm">
+                        <div className="text-xs">
+                          <p className="mb-1">
+                            This step is inside a lazy-loaded chunk.
+                          </p>
+                          <p className="text-muted-foreground mb-1">
+                            A file may appear in an initial chunk elsewhere, yet
+                            this branch loads only when its dynamic path runs.
+                          </p>
+                          <div className="text-muted-foreground">
+                            <div className="font-medium text-foreground mb-1">
+                              Examples
+                            </div>
+                            <ul className="list-disc pl-4 space-y-1">
+                              <li>
+                                Route-level split: page code loads on
+                                navigation.
+                              </li>
+                              <li>
+                                Modal/editor opens and loads its code on demand.
+                              </li>
+                              <li>Feature flag: module loads when enabled.</li>
+                              <li>
+                                Vendor tool used only on a specific screen.
+                              </li>
+                              <li>
+                                Shared file: eager in one path, lazy here via
+                                import().
+                              </li>
+                            </ul>
+                          </div>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
               </div>
-            </div>
+            </li>
           );
         })}
-      </div>
+      </ol>
     </div>
   );
 }

@@ -13,20 +13,20 @@ describe("formatBytes", () => {
     expect(formatBytes(0)).toBe("0 B");
   });
 
-  it("formats bytes < 1024 without decimals", () => {
+  it("formats bytes < 1000 without decimals", () => {
     expect(formatBytes(512)).toBe("512 B");
   });
 
-  it("formats kilobytes without decimals", () => {
-    expect(formatBytes(10 * 1024)).toBe("10 KB");
+  it("formats kilobytes without decimals (base-1000)", () => {
+    expect(formatBytes(10 * 1000)).toBe("10 KB");
   });
 
-  it("formats megabytes with 2 decimals", () => {
-    expect(formatBytes(10 * 1024 * 1024)).toBe("10.00 MB");
+  it("formats megabytes with 2 decimals (base-1000)", () => {
+    expect(formatBytes(10 * 1000 * 1000)).toBe("10.00 MB");
   });
 
-  it("formats gigabytes with 3 decimals", () => {
-    expect(formatBytes(3.5 * 1024 * 1024 * 1024)).toBe("3.500 GB");
+  it("formats gigabytes with 3 decimals (base-1000)", () => {
+    expect(formatBytes(3.5 * 1000 * 1000 * 1000)).toBe("3.500 GB");
   });
 });
 
