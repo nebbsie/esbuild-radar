@@ -134,7 +134,7 @@ export function InclusionPathSection({
         {inclusionPath.map((step, idx) => {
           // Find which chunk this file belongs to
           const chunkContainingFile = chunks.find((chunk) =>
-            chunk.includedInputs.includes(step.file),
+            chunk.includedInputs.includes(step.file)
           );
 
           return (
@@ -194,7 +194,7 @@ export function InclusionPathSection({
                       // Find the chunk created by this dynamic import
                       const dynamicImportPath = step.importStatement.replace(
                         /^["']|["']$/g,
-                        "",
+                        ""
                       );
 
                       // Look for chunks that have this path as their entry point or contain files from this path
@@ -202,14 +202,14 @@ export function InclusionPathSection({
                         // Check if this chunk's entry point matches the dynamic import
                         if (
                           chunk.entryPoint.includes(
-                            dynamicImportPath.replace("./", ""),
+                            dynamicImportPath.replace("./", "")
                           )
                         ) {
                           return true;
                         }
                         // Or check if any included input matches the dynamic import path
                         return chunk.includedInputs.some((input) =>
-                          input.includes(dynamicImportPath.replace("./", "")),
+                          input.includes(dynamicImportPath.replace("./", ""))
                         );
                       });
 

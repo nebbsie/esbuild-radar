@@ -6,6 +6,7 @@ import {
   isEntryPointInChunk,
   isMainEntryPoint,
 } from "@/lib/chunk-utils";
+import type { InitialChunkSummary } from "@/lib/types";
 import { describe, expect, it } from "vitest";
 import { getStatsMetafile } from "./test-helpers";
 import type { ChunkTypeResult, MockChunk } from "./test-types";
@@ -343,6 +344,8 @@ describe("filterChunks", () => {
       const initialChunk: InitialChunkSummary = {
         outputFile: "dist/main.js",
         bytes: 1000,
+        gzipBytes: 300,
+        brotliBytes: 250,
         entryPoint: "src/index.ts",
         isEntry: true,
         includedInputs: ["src/index.ts", "src/utils.ts"],
@@ -355,6 +358,8 @@ describe("filterChunks", () => {
       const initialChunk: InitialChunkSummary = {
         outputFile: "dist/main.js",
         bytes: 1000,
+        gzipBytes: 300,
+        brotliBytes: 250,
         entryPoint: "src/index.ts",
         isEntry: true,
         includedInputs: ["src/index.ts", "src/utils.ts"],
@@ -371,6 +376,8 @@ describe("filterChunks", () => {
       const initialChunk: InitialChunkSummary = {
         outputFile: "dist/main.js",
         bytes: 1000,
+        gzipBytes: 300,
+        brotliBytes: 250,
         entryPoint: "",
         isEntry: true,
         includedInputs: ["src/index.ts"],
