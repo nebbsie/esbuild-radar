@@ -32,7 +32,6 @@ import type {
   Metafile,
   ProcessedMetafileData,
 } from "@/lib/types";
-import { Loader2 } from "lucide-react";
 // Icons are now imported in individual components
 import { useRouter } from "next/navigation";
 import * as React from "react";
@@ -596,8 +595,11 @@ export default function ResultsPage() {
   if (!metafile) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin  text-primary" />
+        <div className="flex flex-col items-center gap-3 text-center">
+          <div
+            className="w-5 h-5 rounded-full border-2 border-muted-foreground/30 border-t-primary animate-spin"
+            aria-label="Loading"
+          />
         </div>
       </div>
     );

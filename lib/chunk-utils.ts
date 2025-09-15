@@ -112,7 +112,7 @@ export function getChunkTypeIcon(loadType: "initial" | "lazy"): {
     case "lazy":
       return {
         icon: "Clock",
-        color: "bg-purple-500",
+        color: "bg-blue-500",
       };
   }
 }

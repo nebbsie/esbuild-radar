@@ -111,8 +111,7 @@ export function ChunksPanel({
           hoverColor=""
           borderColor="border-red-200"
           textColor="text-red-700"
-          iconBgColor="bg-red-500"
-          icon={<Zap size={10} />}
+          iconType="initial"
           description="Code loaded immediately on page load"
         />
 
@@ -120,12 +119,11 @@ export function ChunksPanel({
         <BundleStatsSection
           title="Lazy"
           chunks={lazyChunks}
-          bgColor="bg-purple-50"
+          bgColor="bg-blue-50"
           hoverColor=""
-          borderColor="border-purple-200"
-          textColor="text-purple-700"
-          iconBgColor="bg-purple-500"
-          icon={<Clock size={10} />}
+          borderColor="border-blue-200"
+          textColor="text-blue-700"
+          iconType="lazy"
           description="Code loaded on-demand when needed"
         />
 
@@ -204,7 +202,7 @@ export function ChunksPanel({
                         }
                         className="rounded border-border"
                       />
-                      <Clock size={14} className="text-purple-500" />
+                      <Clock size={14} className="text-blue-500" />
                       <span className="text-xs">Lazy</span>
                     </label>
                   </div>
@@ -261,9 +259,7 @@ export function ChunksPanel({
                   className={`w-full text-left rounded-md border p-1.5 transition-colors hover:bg-accent ${
                     selectedChunk?.outputFile === c.outputFile
                       ? "bg-accent border-primary ring-1 ring-primary/20 shadow-sm"
-                      : isMainEntryChunk
-                        ? "bg-blue-50/50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
-                        : "bg-background border-border hover:border-accent"
+                      : "bg-background border-border hover:border-accent"
                   }`}
                 >
                   <div className="flex items-center gap-2">

@@ -1,3 +1,4 @@
+import { ChunkTypeIcon } from "@/components/chunk-type-icon";
 import {
   Tooltip,
   TooltipContent,
@@ -20,8 +21,7 @@ interface BundleStatsSectionProps {
   hoverColor: string;
   borderColor: string;
   textColor: string;
-  iconBgColor: string;
-  icon: React.ReactNode;
+  iconType: "initial" | "lazy";
   description?: string;
 }
 
@@ -33,8 +33,7 @@ export const BundleStatsSection = ({
   hoverColor,
   borderColor,
   textColor,
-  iconBgColor,
-  icon,
+  iconType,
   description,
 }: BundleStatsSectionProps) => {
   const totalSize = chunks.reduce(
@@ -68,11 +67,12 @@ export const BundleStatsSection = ({
       <TooltipProvider>
         <div className="flex items-center justify-between mb-3">
           <div className={`text-sm font-medium flex items-center gap-2`}>
-            <div className={`p-1 rounded ${iconBgColor}`}>
-              <div className="w-3.5 h-3.5 text-white flex items-center justify-center">
-                {icon}
-              </div>
-            </div>
+            <ChunkTypeIcon
+              type={iconType}
+              size={10}
+              className="flex-shrink-0"
+              compact
+            />
             {title}
           </div>
           <Tooltip>

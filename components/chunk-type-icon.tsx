@@ -29,7 +29,7 @@ export function ChunkTypeIcon({
       case "lazy":
         return {
           Icon: Hourglass,
-          color: "bg-purple-500",
+          color: "bg-blue-500",
         };
       case "main-entry":
         return {

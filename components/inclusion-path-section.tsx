@@ -11,7 +11,7 @@ import { getImportSources, getInclusionPath } from "@/lib/analyser";
 import { getChunkLoadType } from "@/lib/chunk-utils";
 import { formatBytes } from "@/lib/format";
 import type { InitialChunkSummary, Metafile } from "@/lib/types";
-import { CornerDownRight, Flag, HelpCircle } from "lucide-react";
+import { Boxes, CornerDownRight, Flag, HelpCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface InclusionPathSectionProps {
@@ -375,6 +375,37 @@ export function InclusionPathSection({
                           })()
                         : null;
 
+                      // Detect barrel file import (re-export hub): imported module contributes 0 bytes but has its own imports
+                      const isBarrelImport = (() => {
+                        if (!lookupPath) return false;
+                        const importedInputMeta =
+                          metafile.inputs[lookupPath] ||
+                          (normalizedImported
+                            ? Object.entries(metafile.inputs || {}).find(
+                                ([p]) =>
+                                  p === lookupPath ||
+                                  p.includes(normalizedImported)
+                              )?.[1]
+                            : undefined);
+                        const hasOwnImports =
+                          (importedInputMeta?.imports?.length || 0) > 0;
+                        if (!hasOwnImports) return false;
+                        if (!chunkForImported) return false;
+                        const out =
+                          metafile.outputs[chunkForImported.outputFile];
+                        const byExact =
+                          out?.inputs?.[lookupPath]?.bytesInOutput;
+                        const byNorm = normalizedImported
+                          ? Object.entries(out?.inputs || {}).find(
+                              ([p]) =>
+                                p === lookupPath ||
+                                p.includes(normalizedImported)
+                            )?.[1]?.bytesInOutput
+                          : undefined;
+                        const bytesInOut = byExact ?? byNorm;
+                        return bytesInOut === 0;
+                      })();
+
                       const isHighlightedByImported =
                         importedByHoverPath === step.file &&
                         importerPaths.has(step.file);
@@ -516,6 +547,26 @@ export function InclusionPathSection({
                                       </TooltipContent>
                                     </Tooltip>
                                   </TooltipProvider>
+                                  {isBarrelImport && (
+                                    <TooltipProvider>
+                                      <Tooltip delayDuration={600}>
+                                        <TooltipTrigger asChild>
+                                          <span
+                                            className="inline-flex items-center bg-gray-600 text-white rounded-xs p-0.5 ml-1"
+                                            data-badge="barrel-file"
+                                          >
+                                            <Boxes size={10} />
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <div className="text-xs">
+                                            Barrel file: re-exports from other
+                                            modules
+                                          </div>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
                                   {createdChunk && (
                                     <>
                                       <TooltipProvider>
