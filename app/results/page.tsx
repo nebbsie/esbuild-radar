@@ -42,6 +42,8 @@ const STORAGE_KEYS = {
   FULL_PATHS: "esbuild-analyser-show-full-paths",
   ALL_COLLAPSED: "esbuild-analyser-all-collapsed",
   CHUNK_FILTERS: "esbuild-analyser-chunk-filters",
+  PANEL_LAYOUT_3: "esbuild-analyser-panel-layout-3",
+  PANEL_LAYOUT_2: "esbuild-analyser-panel-layout-2",
 } as const;
 
 // Default values
@@ -62,6 +64,10 @@ export default function ResultsPage() {
     React.useState<InitialChunkSummary | null>(null);
   const [selectedModule, setSelectedModule] = React.useState<string | null>(
     null
+  );
+  const [isDetailsOpen, setIsDetailsOpen] = React.useState<boolean>(true);
+  const [viewportWidth, setViewportWidth] = React.useState<number>(
+    typeof window !== "undefined" ? window.innerWidth : 1440
   );
   const [, setInclusion] = React.useState<InclusionPathResult | null>(null);
   const [metafileName, setMetafileName] = React.useState<string>("");
@@ -94,6 +100,14 @@ export default function ResultsPage() {
   const [chunkTypeFilters, setChunkTypeFilters] = usePersistentState(
     STORAGE_KEYS.CHUNK_FILTERS,
     DEFAULT_FILTERS
+  );
+  const [savedLayout3, setSavedLayout3] = usePersistentState<number[]>(
+    STORAGE_KEYS.PANEL_LAYOUT_3,
+    []
+  );
+  const [savedLayout2, setSavedLayout2] = usePersistentState<number[]>(
+    STORAGE_KEYS.PANEL_LAYOUT_2,
+    []
   );
 
   const [chunkSearch, setChunkSearch] = React.useState("");
@@ -135,6 +149,8 @@ export default function ResultsPage() {
       setSelectedModule(result.selectedModule);
       setSelectedChunk(result.selectedChunk);
       setInclusion(result.inclusion);
+      if (result.selectedModule) setIsDetailsOpen(true);
+      if (result.selectedModule) setIsDetailsOpen(true);
 
       // After navigation completes, if we are in push mode add the new module
       if (historyMode === "push") {
@@ -214,6 +230,15 @@ export default function ResultsPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showFilterMenu]);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Track viewport width to recompute responsive defaults
+  React.useEffect(() => {
+    const handleResize = () => {
+      setViewportWidth(window.innerWidth);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // Separate initial and lazy chunks for the new UI sections
   const initialChunks = React.useMemo(() => {
@@ -545,6 +570,74 @@ export default function ResultsPage() {
     [chunkSearch, navigateSearchResult]
   );
 
+  // Compute default 3-panel layout with responsive targets (~290px left, ~750px middle)
+  const defaultLayout3 = React.useMemo((): [number, number, number] => {
+    const leftMin = 20;
+    const leftMax = 40;
+    const middleMin = 25;
+    const middleMax = 50;
+    const rightMin = 25;
+    const rightMax = 40;
+
+    const desiredLeftPercent = (290 / viewportWidth) * 100;
+    const desiredMiddlePercent = (750 / viewportWidth) * 100;
+
+    const left = Math.min(leftMax, Math.max(leftMin, desiredLeftPercent));
+    let middle = Math.min(middleMax, Math.max(middleMin, desiredMiddlePercent));
+    let right = 100 - left - middle;
+
+    if (right < rightMin) {
+      right = rightMin;
+      middle = Math.min(middleMax, Math.max(middleMin, 100 - left - right));
+    } else if (right > rightMax) {
+      right = rightMax;
+      middle = Math.min(middleMax, Math.max(middleMin, 100 - left - right));
+    }
+
+    return [left, middle, right];
+  }, [viewportWidth]);
+
+  const defaultLayout2 = React.useMemo((): [number, number] => {
+    const left = defaultLayout3[0];
+    const middle = 100 - left;
+    return [left, middle];
+  }, [defaultLayout3]);
+
+  // Resolve current layout from saved state or defaults
+  const layout3 = React.useMemo<[number, number, number]>(
+    () =>
+      savedLayout3.length === 3
+        ? (savedLayout3 as [number, number, number])
+        : defaultLayout3,
+    [savedLayout3, defaultLayout3]
+  );
+
+  const layout2 = React.useMemo<[number, number]>(
+    () =>
+      savedLayout2.length === 2
+        ? (savedLayout2 as [number, number])
+        : defaultLayout2,
+    [savedLayout2, defaultLayout2]
+  );
+
+  const twoPanelSizes = React.useMemo((): { left: number; middle: number } => {
+    return { left: layout2[0], middle: layout2[1] };
+  }, [layout2]);
+
+  const panelSizes = React.useMemo((): {
+    left: number;
+    middle: number;
+    right: number;
+  } => {
+    return { left: layout3[0], middle: layout3[1], right: layout3[2] };
+  }, [layout3]);
+
+  const handleCloseDetails = React.useCallback(() => {
+    setSelectedModule(null);
+    setInclusion(null);
+    setIsDetailsOpen(false);
+  }, []);
+
   // Auto-select chunk if search results in single match
   // But don't override manual navigation to modules in filtered chunks
   React.useEffect(() => {
@@ -668,64 +761,100 @@ export default function ResultsPage() {
   return (
     <div className="min-h-screen p-2 sm:p-4">
       <div className="mx-auto w-full space-y-2 overflow-x-hidden h-[calc(100vh-2rem)]">
-        <ResizablePanelGroup direction="horizontal" className="h-full">
-          <ResizablePanel defaultSize={25} minSize={20} maxSize={40}>
-            <ChunksPanel
-              metafile={metafile}
-              initialChunks={initialChunks}
-              lazyChunks={lazyChunks}
-              chunkSearch={chunkSearch}
-              setChunkSearch={setChunkSearch}
-              handleSearchKeyDown={handleSearchKeyDown}
-              chunkTypeFilters={chunkTypeFilters}
-              setChunkTypeFilters={setChunkTypeFilters}
-              showFilterMenu={showFilterMenu}
-              setShowFilterMenu={setShowFilterMenu}
-              filteredChunks={filteredChunks}
-              chunks={chunks}
-              selectedChunk={selectedChunk}
-              navigateToModule={navigateToModule}
-              initialChunk={initialChunk}
-              setSelectedModule={setSelectedModule}
-              setSelectedChunk={setSelectedChunk}
-              setInclusion={setInclusion}
-            />
-          </ResizablePanel>
+        {(() => {
+          const groupKey = isDetailsOpen
+            ? `3-${savedLayout3.length === 3 ? "saved" : viewportWidth}`
+            : `2-${savedLayout2.length === 2 ? "saved" : viewportWidth}`;
+          return (
+            <ResizablePanelGroup
+              key={groupKey}
+              direction="horizontal"
+              className="h-full"
+              onLayout={(sizes) => {
+                if (isDetailsOpen) setSavedLayout3(sizes);
+                else setSavedLayout2(sizes);
+              }}
+            >
+              <ResizablePanel
+                defaultSize={
+                  isDetailsOpen ? panelSizes.left : twoPanelSizes.left
+                }
+                minSize={20}
+                maxSize={40}
+              >
+                <ChunksPanel
+                  metafile={metafile}
+                  initialChunks={initialChunks}
+                  lazyChunks={lazyChunks}
+                  chunkSearch={chunkSearch}
+                  setChunkSearch={setChunkSearch}
+                  handleSearchKeyDown={handleSearchKeyDown}
+                  chunkTypeFilters={chunkTypeFilters}
+                  setChunkTypeFilters={setChunkTypeFilters}
+                  showFilterMenu={showFilterMenu}
+                  setShowFilterMenu={setShowFilterMenu}
+                  filteredChunks={filteredChunks}
+                  chunks={chunks}
+                  selectedChunk={selectedChunk}
+                  navigateToModule={navigateToModule}
+                  initialChunk={initialChunk}
+                  setSelectedModule={setSelectedModule}
+                  setSelectedChunk={setSelectedChunk}
+                  setInclusion={setInclusion}
+                />
+              </ResizablePanel>
 
-          <ResizableHandle className="mx-2 opacity-0 hover:opacity-50" />
+              <ResizableHandle className="mx-2 opacity-0 hover:opacity-50" />
 
-          <ResizablePanel defaultSize={35} minSize={25} maxSize={50}>
-            <FilesPanel
-              metafile={metafile}
-              selectedChunk={selectedChunk}
-              showNodeModules={showNodeModules}
-              setShowNodeModules={setShowNodeModules}
-              showFullPaths={showFullPaths}
-              setShowFullPaths={setShowFullPaths}
-              allCollapsed={allCollapsed}
-              setAllCollapsed={setAllCollapsed}
-              onSelectModule={onSelectModule}
-              selectedModule={selectedModule}
-              chunkSearch={chunkSearch}
-            />
-          </ResizablePanel>
+              <ResizablePanel
+                defaultSize={
+                  isDetailsOpen ? panelSizes.middle : twoPanelSizes.middle
+                }
+                minSize={25}
+                maxSize={isDetailsOpen ? 50 : 100}
+              >
+                <FilesPanel
+                  metafile={metafile}
+                  selectedChunk={selectedChunk}
+                  showNodeModules={showNodeModules}
+                  setShowNodeModules={setShowNodeModules}
+                  showFullPaths={showFullPaths}
+                  setShowFullPaths={setShowFullPaths}
+                  allCollapsed={allCollapsed}
+                  setAllCollapsed={setAllCollapsed}
+                  onSelectModule={onSelectModule}
+                  selectedModule={selectedModule}
+                  chunkSearch={chunkSearch}
+                />
+              </ResizablePanel>
 
-          <ResizableHandle className="mx-2 opacity-0 hover:opacity-50" />
+              {isDetailsOpen && (
+                <>
+                  <ResizableHandle className="mx-2 opacity-0 hover:opacity-50" />
 
-          <ResizablePanel defaultSize={40} minSize={25} maxSize={40}>
-            <DetailsPanel
-              metafile={metafile}
-              selectedModule={selectedModule}
-              selectedChunk={selectedChunk}
-              initialChunk={initialChunk}
-              chunks={chunks}
-              initialSummary={initialSummary}
-              moduleHistory={moduleHistory}
-              goBackToPreviousModule={goBackToPreviousModule}
-              navigateToModule={navigateToModule}
-            />
-          </ResizablePanel>
-        </ResizablePanelGroup>
+                  <ResizablePanel
+                    defaultSize={panelSizes.right}
+                    minSize={25}
+                    maxSize={40}
+                  >
+                    <DetailsPanel
+                      metafile={metafile}
+                      selectedModule={selectedModule}
+                      selectedChunk={selectedChunk}
+                      initialChunk={initialChunk}
+                      chunks={chunks}
+                      initialSummary={initialSummary}
+                      moduleHistory={moduleHistory}
+                      goBackToPreviousModule={goBackToPreviousModule}
+                      navigateToModule={navigateToModule}
+                      onClose={handleCloseDetails}
+                    />
+                  </ResizablePanel>
+                </>
+              )}
+            </ResizablePanelGroup>
+          );
+        })()}
       </div>
       <input
         ref={fileInputRef}

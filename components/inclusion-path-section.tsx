@@ -12,8 +12,7 @@ import { getChunkLoadType } from "@/lib/chunk-utils";
 import { formatBytes } from "@/lib/format";
 import type { InitialChunkSummary, Metafile } from "@/lib/types";
 import { Boxes, CornerDownRight, Flag, HelpCircle } from "lucide-react";
-import React, { useEffect, useState } from "react";
-import { Separator } from "@/components/ui/separator";
+import { useEffect, useState } from "react";
 
 interface InclusionPathSectionProps {
   metafile: Metafile;
@@ -47,7 +46,7 @@ export function InclusionPathSection({
       inclusionPath[inclusionPath.length - 1].file !== selectedModule)
   ) {
     const currentChunk = chunks.find((c) =>
-      c.includedInputs.includes(selectedModule),
+      c.includedInputs.includes(selectedModule)
     );
 
     inclusionPath = [
@@ -69,7 +68,7 @@ export function InclusionPathSection({
         metafile,
         selectedModule,
         chunks,
-        initialSummary?.initial.outputs || [],
+        initialSummary?.initial.outputs || []
       )
     : [];
 
@@ -78,10 +77,10 @@ export function InclusionPathSection({
 
   // Listen for hover coming from ImportedBySection to highlight matching row
   const [importedByHoverPath, setImportedByHoverPath] = useState<string | null>(
-    null,
+    null
   );
   const [inclusionHoverPath, setInclusionHoverPath] = useState<string | null>(
-    null,
+    null
   );
 
   useEffect(() => {
@@ -97,21 +96,21 @@ export function InclusionPathSection({
 
     window.addEventListener(
       "imported-by-hover",
-      importedByHandler as EventListener,
+      importedByHandler as EventListener
     );
     window.addEventListener(
       "inclusion-path-hover",
-      inclusionHandler as EventListener,
+      inclusionHandler as EventListener
     );
 
     return () => {
       window.removeEventListener(
         "imported-by-hover",
-        importedByHandler as EventListener,
+        importedByHandler as EventListener
       );
       window.removeEventListener(
         "inclusion-path-hover",
-        inclusionHandler as EventListener,
+        inclusionHandler as EventListener
       );
     };
   }, []);
@@ -203,8 +202,8 @@ export function InclusionPathSection({
         chunks.find((chunk) =>
           chunk.includedInputs.some(
             (input) =>
-              input === stepFile || normalize(input).includes(stepFileNorm),
-          ),
+              input === stepFile || normalize(input).includes(stepFileNorm)
+          )
         );
 
       // Fallback: scan metafile outputs when not found in chunks
@@ -243,7 +242,7 @@ export function InclusionPathSection({
     [] as Array<{
       module: string;
       steps: Array<{ step: (typeof inclusionPath)[0]; originalIndex: number }>;
-    }>,
+    }>
   );
 
   return (
@@ -268,7 +267,7 @@ export function InclusionPathSection({
       <ol className="space-y-4">
         {groupedSteps.map((group, groupIdx) => {
           const groupChunkForHeader = chunks.find(
-            (c) => c.outputFile === group.module,
+            (c) => c.outputFile === group.module
           );
           const groupLoadType = groupChunkForHeader
             ? getChunkLoadType(groupChunkForHeader, initialSummary)
@@ -304,18 +303,18 @@ export function InclusionPathSection({
 
                       // We already found the chunk during grouping, but we need it again for the tooltip
                       const chunkContainingFile = chunks.find((chunk) =>
-                        chunk.includedInputs.includes(step.file),
+                        chunk.includedInputs.includes(step.file)
                       );
                       // Try to resolve the imported module path for this step (to compute size delta)
                       const importerInput = metafile.inputs[step.file];
                       const matchedEdge = importerInput?.imports?.find(
                         (imp) =>
-                          (imp.original || imp.path) === step.importStatement,
+                          (imp.original || imp.path) === step.importStatement
                       );
                       const importedInputPath = matchedEdge?.path;
                       const rawImportText = step.importStatement.replace(
                         /^(["'])|(["'])$/g,
-                        "",
+                        ""
                       );
                       const lookupPath = importedInputPath || rawImportText;
                       const normalizedImported = lookupPath
@@ -328,8 +327,8 @@ export function InclusionPathSection({
                                 p === lookupPath ||
                                 (normalizedImported
                                   ? p.includes(normalizedImported)
-                                  : false),
-                            ),
+                                  : false)
+                            )
                           )
                         : null;
                       // Reuse indicator removed per UX: we'll highlight in ImportedBySection on hover instead
@@ -343,7 +342,7 @@ export function InclusionPathSection({
                             ? Object.entries(out?.inputs || {}).find(
                                 ([p]) =>
                                   p === lookupPath ||
-                                  p.includes(normalizedImported),
+                                  p.includes(normalizedImported)
                               )?.[1]
                             : undefined);
                         return (
@@ -361,15 +360,15 @@ export function InclusionPathSection({
                             return (
                               chunks.find((chunk) =>
                                 chunk.entryPoint.includes(
-                                  dynamicImportPath.replace("./", ""),
-                                ),
+                                  dynamicImportPath.replace("./", "")
+                                )
                               ) ||
                               chunks.find((chunk) =>
                                 chunk.includedInputs.some((input) =>
                                   input.includes(
-                                    dynamicImportPath.replace("./", ""),
-                                  ),
-                                ),
+                                    dynamicImportPath.replace("./", "")
+                                  )
+                                )
                               ) ||
                               null
                             );
@@ -385,7 +384,7 @@ export function InclusionPathSection({
                             ? Object.entries(metafile.inputs || {}).find(
                                 ([p]) =>
                                   p === lookupPath ||
-                                  p.includes(normalizedImported),
+                                  p.includes(normalizedImported)
                               )?.[1]
                             : undefined);
                         const hasOwnImports =
@@ -400,7 +399,7 @@ export function InclusionPathSection({
                           ? Object.entries(out?.inputs || {}).find(
                               ([p]) =>
                                 p === lookupPath ||
-                                p.includes(normalizedImported),
+                                p.includes(normalizedImported)
                             )?.[1]?.bytesInOutput
                           : undefined;
                         const bytesInOut = byExact ?? byNorm;
@@ -431,7 +430,7 @@ export function InclusionPathSection({
                               "inclusion-path-hover",
                               {
                                 detail: { path: step.file },
-                              },
+                              }
                             );
                             window.dispatchEvent(evt);
                           }}
@@ -440,7 +439,7 @@ export function InclusionPathSection({
                               "inclusion-path-hover",
                               {
                                 detail: { path: null },
-                              },
+                              }
                             );
                             window.dispatchEvent(evt);
                           }}
@@ -486,15 +485,12 @@ export function InclusionPathSection({
                               </div>
                               {!isLastStep && (
                                 <div className="mt-1 flex items-center gap-1">
-                                  {step.isDynamicImport ? (
-                                    <span className="text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1">
-                                      <CornerDownRight size={12} /> imports
-                                    </span>
-                                  ) : (
-                                    <span className="text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1">
-                                      <CornerDownRight size={12} /> imports
-                                    </span>
-                                  )}
+                                  <span className="text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1">
+                                    <CornerDownRight size={12} />{" "}
+                                    {createdChunk
+                                      ? "lazily imports"
+                                      : "imports"}
+                                  </span>
                                   <TooltipProvider>
                                     <Tooltip delayDuration={600}>
                                       <TooltipTrigger asChild>
@@ -506,7 +502,7 @@ export function InclusionPathSection({
                                               "inclusion-path-hover",
                                               {
                                                 detail: { path: step.file },
-                                              },
+                                              }
                                             );
                                             window.dispatchEvent(evt);
                                           }}
@@ -515,7 +511,7 @@ export function InclusionPathSection({
                                               "inclusion-path-hover",
                                               {
                                                 detail: { path: null },
-                                              },
+                                              }
                                             );
                                             window.dispatchEvent(evt);
                                           }}
@@ -535,7 +531,7 @@ export function InclusionPathSection({
                                             <div className="text-muted-foreground mt-1">
                                               {chunkContainingFile.outputFile} (
                                               {formatBytes(
-                                                chunkContainingFile.bytes,
+                                                chunkContainingFile.bytes
                                               )}
                                               )
                                             </div>

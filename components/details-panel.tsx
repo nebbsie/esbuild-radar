@@ -8,9 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 // Removed unused tooltip imports
 import { ModuleNavigationHistory } from "@/lib/navigation-utils";
 import type { InitialChunkSummary, Metafile } from "@/lib/types";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, X } from "lucide-react";
 import React from "react";
-import { Separator } from "@/components/ui/separator";
+// Removed unused Separator import
 // Removed unused formatBytes import
 
 interface DetailsPanelProps {
@@ -28,8 +28,9 @@ interface DetailsPanelProps {
   navigateToModule: (
     modulePath: string,
     chunk?: InitialChunkSummary,
-    historyMode?: "push" | "reset" | "none",
+    historyMode?: "push" | "reset" | "none"
   ) => void;
+  onClose: () => void;
 }
 
 export function DetailsPanel({
@@ -42,6 +43,7 @@ export function DetailsPanel({
   moduleHistory,
   goBackToPreviousModule,
   navigateToModule,
+  onClose,
 }: DetailsPanelProps) {
   // Handle navigation event from child sections (e.g., created chunks)
   React.useEffect(() => {
@@ -61,7 +63,7 @@ export function DetailsPanel({
     return () =>
       window.removeEventListener(
         "navigate-to-module",
-        handler as EventListener,
+        handler as EventListener
       );
   }, [navigateToModule]);
   return (
@@ -82,9 +84,21 @@ export function DetailsPanel({
                   </Button>
                 )}
 
-                <span className="flex-1 min-w-0 text-xs text-muted-foreground border border-border bg-muted/50 rounded-md px-2 py-0.5 h-[28px] flex items-center">
+                <span
+                  className="flex-1 min-w-0 text-xs text-muted-foreground border border-border bg-muted/50 rounded-md px-2 py-0.5 h-[28px] flex items-center"
+                  title={selectedModule}
+                >
                   <span className="truncate">{selectedModule}</span>
                 </span>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-[28px] w-[28px] p-0 hover:bg-accent flex-shrink-0"
+                  onClick={onClose}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
               </CardTitle>
             </div>
           </div>

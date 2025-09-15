@@ -9,7 +9,7 @@
 - Store reusable components in ./components.
 - Write tests for logic and put them in ./tests.
 - Write and use test helpers in ./tests/test-helpers.ts if needed.
-- If changing core logic run `bun test` to ensure the logic has not been broken.
+- If changing core logic run `bun test` to ensure the logic has not been broken, you don't need to run bun test if you are just updating the ui.
 - Always use TypeScript and type everything.
 - Use types over interfaces unless absolutely necessary.
 - Use functional components.

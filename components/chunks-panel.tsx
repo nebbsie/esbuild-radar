@@ -5,12 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import { BundleStatsSection } from "@/components/ui/bundle-stats-section";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { formatBytes } from "@/lib/format";
 import { determineModuleForChunkOpening } from "@/lib/navigation-utils";
 import type {
@@ -39,7 +33,7 @@ interface ChunksPanelProps {
   navigateToModule: (
     modulePath: string,
     chunk?: InitialChunkSummary,
-    historyMode?: "push" | "reset" | "none",
+    historyMode?: "push" | "reset" | "none"
   ) => void;
   initialChunk: InitialChunkSummary | null;
   setSelectedModule: (module: string | null) => void;
@@ -184,7 +178,7 @@ export function ChunksPanel({
             )}
             {filteredChunks.map((c) => {
               const loadType = initialChunks.some(
-                (chunk) => chunk.outputFile === c.outputFile,
+                (chunk) => chunk.outputFile === c.outputFile
               )
                 ? "initial"
                 : "lazy";

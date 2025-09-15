@@ -1,6 +1,7 @@
 "use client";
 
 import { FileTree } from "@/components/file-tree";
+import { Sunburst } from "@/components/sunburst";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
@@ -12,7 +13,16 @@ import {
 import { formatBytes } from "@/lib/format";
 import { buildPathTree } from "@/lib/path-tree";
 import type { InitialChunkSummary, Metafile } from "@/lib/types";
-import { Eye, EyeOff, File, FileText, Minimize2 } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  File,
+  FileText,
+  List,
+  Minimize2,
+  PieChart,
+} from "lucide-react";
+import * as React from "react";
 
 interface FilesPanelProps {
   metafile: Metafile;
@@ -41,6 +51,9 @@ export function FilesPanel({
   selectedModule,
   chunkSearch,
 }: FilesPanelProps) {
+  const [viewMode, setViewMode] = React.useState<"tree" | "sunburst">(
+    "sunburst"
+  );
   return (
     <Card className="h-full gap-0">
       <CardHeader className="pb-0">
@@ -64,6 +77,33 @@ export function FilesPanel({
           </div>
 
           <div className="flex gap-1 justify-end pt-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      setViewMode(viewMode === "tree" ? "sunburst" : "tree")
+                    }
+                    className="h-8 w-8 p-0 cursor-pointer"
+                  >
+                    {viewMode === "tree" ? (
+                      <PieChart className="h-4 w-4" />
+                    ) : (
+                      <List className="h-4 w-4" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>
+                    {viewMode === "tree"
+                      ? "Show sunburst view"
+                      : "Show tree view"}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -203,7 +243,16 @@ export function FilesPanel({
                   );
                 }
 
-                return (
+                return viewMode === "sunburst" ? (
+                  <div className="px-1 h-full">
+                    <Sunburst
+                      tree={tree}
+                      onSelectFile={onSelectModule}
+                      selectedPath={selectedModule}
+                      className="w-full h-full"
+                    />
+                  </div>
+                ) : (
                   <div className="space-y-1 overflow-hidden px-1">
                     <div className="space-y-2">
                       {tree.children?.map((child) => (

@@ -137,3 +137,18 @@ details:not([open]) summary .transition-opacity:first-child {
 details:not([open]) summary .transition-opacity:last-child {
   opacity: 0;
 }
+
+/* Sunburst slice separator thickness */
+.sunburst-viz .main-arc {
+  stroke: white !important;
+  stroke-width: 2px !important;
+}
+
+
+
+/* Sunburst tooltip wrapping */
+.sunburst-tooltip {
+  max-width: 28rem;
+  white-space: normal;
+  word-break: break-word;
+}
