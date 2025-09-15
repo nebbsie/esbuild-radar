@@ -1,5 +1,6 @@
 "use client";
 
+import { BundleTopBar } from "@/components/bundle-topbar";
 import { ChunksPanel } from "@/components/chunks-panel";
 import { DetailsPanel } from "@/components/details-panel";
 import { FilesPanel } from "@/components/files-panel";
@@ -30,6 +31,7 @@ import type {
   InclusionPathResult,
   InitialChunkSummary,
   Metafile,
+  MetafileData,
   ProcessedMetafileData,
 } from "@/lib/types";
 // Icons are now imported in individual components
@@ -73,6 +75,9 @@ export default function ResultsPage() {
   const [metafileName, setMetafileName] = React.useState<string>("");
   const [initialChunk, setInitialChunk] =
     React.useState<InitialChunkSummary | null>(null);
+  const [currentBundleId, setCurrentBundleId] = React.useState<string | null>(
+    null
+  );
 
   // Update page title when metafile name changes
   React.useEffect(() => {
@@ -251,134 +256,180 @@ export default function ResultsPage() {
     return createChunkSummaries(initialSummary.lazy.outputs, metafile);
   }, [initialSummary, metafile]);
 
-  React.useEffect(() => {
-    metafileStorage.loadMetafile().then((storedData) => {
-      if (storedData) {
-        try {
-          const json = JSON.parse(storedData.data);
-          setMetafileName(storedData.name || "");
-          const mf = parseMetafile(json);
+  // Load metafile data and process it
+  const loadBundleData = React.useCallback(async (bundleData: MetafileData) => {
+    try {
+      const json = JSON.parse(bundleData.data);
+      setMetafileName(bundleData.name || "");
+      const mf = parseMetafile(json);
 
-          // Pick the initial chunk
-          const pickedInitial = pickInitialOutput(mf);
-          if (!pickedInitial) {
-            console.warn("No initial chunk found");
-            return;
-          }
-
-          // Get initial/lazy summary using the tested logic
-          const summary = summarizeInitial(mf, pickedInitial);
-          setInitialSummary(summary);
-
-          // Convert output filenames to InitialChunkSummary objects
-          const unsortedChunks: InitialChunkSummary[] = [
-            ...summary.initial.outputs,
-            ...summary.lazy.outputs,
-          ]
-            .map((outputFile) => {
-              const out = mf.outputs[outputFile];
-              if (!out) return null;
-              return {
-                outputFile,
-                bytes: out.bytes || 0,
-                gzipBytes: estimateGzipSize(out.bytes || 0),
-                brotliBytes: estimateBrotliSize(out.bytes || 0),
-                entryPoint:
-                  out.entryPoint || inferEntryForOutput(mf, outputFile) || "",
-                isEntry: Boolean(out.entryPoint),
-                includedInputs: Object.keys(out.inputs || {}),
-              };
-            })
-            .filter((chunk): chunk is InitialChunkSummary => Boolean(chunk));
-
-          // Find the main entry chunk for sorting
-          const mainEntryPoint = getInitialChunkEntryPoint(mf, summary);
-          const mainEntryChunk = mainEntryPoint
-            ? unsortedChunks.find((c) => c.entryPoint === mainEntryPoint)
-            : null;
-
-          // Sort chunks: main entry chunk first, then by size
-          const allChunks = unsortedChunks.sort((a, b) => {
-            // If a is the main entry chunk, it comes first
-            if (mainEntryChunk && a.outputFile === mainEntryChunk.outputFile)
-              return -1;
-            // If b is the main entry chunk, a comes after
-            if (mainEntryChunk && b.outputFile === mainEntryChunk.outputFile)
-              return 1;
-
-            // Otherwise sort by size (largest first)
-            return b.bytes - a.bytes;
-          });
-
-          // Select the first chunk from the classified list, or the initial chunk if empty
-          let initialSelected = allChunks[0] || null;
-          if (!initialSelected && pickedInitial) {
-            const out = mf.outputs[pickedInitial];
-            initialSelected = {
-              outputFile: pickedInitial,
-              bytes: out.bytes || 0,
-              gzipBytes: estimateGzipSize(out.bytes || 0),
-              brotliBytes: estimateBrotliSize(out.bytes || 0),
-              entryPoint:
-                out.entryPoint || inferEntryForOutput(mf, pickedInitial) || "",
-              isEntry: Boolean(out.entryPoint),
-              includedInputs: Object.keys(out.inputs || {}),
-            };
-          }
-
-          setMetafile(mf);
-          setChunks(allChunks);
-          setSelectedChunk(initialSelected);
-
-          // Set the initial chunk
-          const initialChunkEntry = getInitialChunkEntryPoint(mf, summary);
-          if (initialChunkEntry) {
-            const chunk = allChunks.find(
-              (c) => c.entryPoint === initialChunkEntry
-            );
-            setInitialChunk(chunk || null);
-          } else {
-            setInitialChunk(null);
-          }
-
-          // Only select the entry point if it's actually included in this chunk
-          const entryPointInChunk =
-            initialSelected?.entryPoint &&
-            initialSelected.includedInputs.includes(initialSelected.entryPoint);
-          setSelectedModule(
-            entryPointInChunk ? initialSelected.entryPoint : null
-          );
-          setInclusion(null);
-
-          // Scroll the entry point file into view if it was selected
-          if (entryPointInChunk) {
-            setTimeout(() => {
-              const selectedElement = document.querySelector(
-                '[data-selected-module="true"]'
-              );
-              if (selectedElement) {
-                selectedElement.scrollIntoView({
-                  behavior: "instant",
-                  block: "center",
-                });
-              }
-            }, 100);
-          }
-        } catch (err) {
-          console.error("Failed to parse metafile:", err);
-          // Clear invalid data
-          clearData();
-          alert(
-            "Invalid esbuild metafile JSON: " +
-              (err instanceof Error ? err.message : "Unknown error")
-          );
-        }
-      } else {
-        // No stored metafile found, redirect to upload page
-        router.push("/upload");
+      // Pick the initial chunk
+      const pickedInitial = pickInitialOutput(mf);
+      if (!pickedInitial) {
+        console.warn("No initial chunk found");
+        return;
       }
-    });
-  }, [router]);
+
+      // Get initial/lazy summary using the tested logic
+      const summary = summarizeInitial(mf, pickedInitial);
+      setInitialSummary(summary);
+
+      // Convert output filenames to InitialChunkSummary objects
+      const unsortedChunks: InitialChunkSummary[] = [
+        ...summary.initial.outputs,
+        ...summary.lazy.outputs,
+      ]
+        .map((outputFile) => {
+          const out = mf.outputs[outputFile];
+          if (!out) return null;
+          return {
+            outputFile,
+            bytes: out.bytes || 0,
+            gzipBytes: estimateGzipSize(out.bytes || 0),
+            brotliBytes: estimateBrotliSize(out.bytes || 0),
+            entryPoint:
+              out.entryPoint || inferEntryForOutput(mf, outputFile) || "",
+            isEntry: Boolean(out.entryPoint),
+            includedInputs: Object.keys(out.inputs || {}),
+          };
+        })
+        .filter((chunk): chunk is InitialChunkSummary => Boolean(chunk));
+
+      // Find the main entry chunk for sorting
+      const mainEntryPoint = getInitialChunkEntryPoint(mf, summary);
+      const mainEntryChunk = mainEntryPoint
+        ? unsortedChunks.find((c) => c.entryPoint === mainEntryPoint)
+        : null;
+
+      // Sort chunks: main entry chunk first, then by size
+      const allChunks = unsortedChunks.sort((a, b) => {
+        // If a is the main entry chunk, it comes first
+        if (mainEntryChunk && a.outputFile === mainEntryChunk.outputFile)
+          return -1;
+        // If b is the main entry chunk, a comes after
+        if (mainEntryChunk && b.outputFile === mainEntryChunk.outputFile)
+          return 1;
+
+        // Otherwise sort by size (largest first)
+        return b.bytes - a.bytes;
+      });
+
+      // Select the first chunk from the classified list, or the initial chunk if empty
+      let initialSelected = allChunks[0] || null;
+      if (!initialSelected && pickedInitial) {
+        const out = mf.outputs[pickedInitial];
+        initialSelected = {
+          outputFile: pickedInitial,
+          bytes: out.bytes || 0,
+          gzipBytes: estimateGzipSize(out.bytes || 0),
+          brotliBytes: estimateBrotliSize(out.bytes || 0),
+          entryPoint:
+            out.entryPoint || inferEntryForOutput(mf, pickedInitial) || "",
+          isEntry: Boolean(out.entryPoint),
+          includedInputs: Object.keys(out.inputs || {}),
+        };
+      }
+
+      setMetafile(mf);
+      setChunks(allChunks);
+      setSelectedChunk(initialSelected);
+
+      // Set the initial chunk
+      const initialChunkEntry = getInitialChunkEntryPoint(mf, summary);
+      if (initialChunkEntry) {
+        const chunk = allChunks.find((c) => c.entryPoint === initialChunkEntry);
+        setInitialChunk(chunk || null);
+      } else {
+        setInitialChunk(null);
+      }
+
+      // Only select the entry point if it's actually included in this chunk
+      const entryPointInChunk =
+        initialSelected?.entryPoint &&
+        initialSelected.includedInputs.includes(initialSelected.entryPoint);
+      setSelectedModule(entryPointInChunk ? initialSelected.entryPoint : null);
+      setInclusion(null);
+
+      // Scroll the entry point file into view if it was selected
+      if (entryPointInChunk) {
+        setTimeout(() => {
+          const selectedElement = document.querySelector(
+            '[data-selected-module="true"]'
+          );
+          if (selectedElement) {
+            selectedElement.scrollIntoView({
+              behavior: "instant",
+              block: "center",
+            });
+          }
+        }, 100);
+      }
+    } catch (err) {
+      console.error("Failed to parse metafile:", err);
+      // Clear invalid data
+      clearData();
+      alert(
+        "Invalid esbuild metafile JSON: " +
+          (err instanceof Error ? err.message : "Unknown error")
+      );
+    }
+  }, []);
+
+  // Load initial bundle on mount
+  React.useEffect(() => {
+    const loadInitialBundle = async () => {
+      // First check if there's a current bundle
+      const currentBundleData = await metafileStorage.loadMetafile();
+
+      if (currentBundleData) {
+        // If there's a current bundle, load it
+        setCurrentBundleId(currentBundleData.id);
+        await loadBundleData(currentBundleData);
+      } else {
+        // No current bundle, check if there are any bundles at all
+        const allBundles = await metafileStorage.getAllBundles();
+
+        if (allBundles.length > 0) {
+          // Load the last bundle (newest at the end)
+          const lastBundle = allBundles[allBundles.length - 1];
+          setCurrentBundleId(lastBundle.id);
+          await metafileStorage.setCurrentBundle(lastBundle.id);
+          await loadBundleData(lastBundle);
+        } else {
+          // No bundles at all, redirect to upload
+          router.push("/upload");
+        }
+      }
+    };
+
+    loadInitialBundle();
+  }, [router, loadBundleData]);
+
+  // Handle bundle switching
+  const handleBundleChange = React.useCallback(
+    async (bundleId: string) => {
+      const bundleData = await metafileStorage.loadMetafileById(bundleId);
+      if (bundleData) {
+        setCurrentBundleId(bundleId);
+        await loadBundleData(bundleData);
+      }
+    },
+    [loadBundleData]
+  );
+
+  // Handle bundle deletion
+  const handleBundleDeleted = React.useCallback(async () => {
+    const remainingBundles = await metafileStorage.getAllBundles();
+    if (remainingBundles.length > 0) {
+      // Load the last bundle (keep UX consistent)
+      await handleBundleChange(
+        remainingBundles[remainingBundles.length - 1].id
+      );
+    } else {
+      // No bundles left, redirect to upload
+      router.push("/upload");
+    }
+  }, [handleBundleChange, router]);
 
   function onSelectModule(mod: string) {
     navigateToModule(mod);
@@ -760,7 +811,13 @@ export default function ResultsPage() {
 
   return (
     <div className="min-h-screen p-2 sm:p-4">
-      <div className="mx-auto w-full space-y-2 overflow-x-hidden h-[calc(100vh-2rem)]">
+      <BundleTopBar
+        currentBundleId={currentBundleId || undefined}
+        onBundleChange={handleBundleChange}
+        onBundleDeleted={handleBundleDeleted}
+      />
+
+      <div className="mx-auto w-full space-y-2 overflow-x-hidden h-[calc(100vh-2rem-68px)]">
         {(() => {
           const groupKey = isDetailsOpen
             ? `3-${savedLayout3.length === 3 ? "saved" : viewportWidth}`

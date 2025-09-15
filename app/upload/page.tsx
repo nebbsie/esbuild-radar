@@ -13,10 +13,8 @@ export default function UploadPage() {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [metafileName, setMetafileName] = React.useState("");
 
-  React.useEffect(() => {
-    // Clear any existing data when component mounts
-    metafileStorage.clearMetafile();
-  }, []);
+  // Do not clear existing bundles on mount; allow multiple tabs
+  React.useEffect(() => {}, []);
 
   function onChooseFile() {
     fileInputRef.current?.click();
@@ -33,14 +31,14 @@ export default function UploadPage() {
       // Store in IndexedDB using the storage service
       await metafileStorage.storeMetafile(
         JSON.stringify(json),
-        metafileName || "Demo Metafile",
+        metafileName || "demo-stats.json"
       );
       router.push("/results");
     } catch (err) {
       console.error("Failed to load demo metafile:", err);
       alert(
         "Failed to load demo metafile: " +
-          (err instanceof Error ? err.message : "Unknown error"),
+          (err instanceof Error ? err.message : "Unknown error")
       );
     }
   }
@@ -52,16 +50,15 @@ export default function UploadPage() {
       // Validate that it's a proper esbuild metafile
       parseMetafile(json);
       // Store in IndexedDB using the storage service
-      await metafileStorage.storeMetafile(
-        JSON.stringify(json),
-        metafileName || undefined,
-      );
+      // Use the actual filename if no custom name was provided
+      const bundleName = metafileName || file.name;
+      await metafileStorage.storeMetafile(JSON.stringify(json), bundleName);
       router.push("/results");
     } catch (err) {
       console.error("Failed to process metafile:", err);
       alert(
         "Failed to process metafile: " +
-          (err instanceof Error ? err.message : "Unknown error"),
+          (err instanceof Error ? err.message : "Unknown error")
       );
     }
   }

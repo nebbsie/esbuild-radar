@@ -216,4 +216,8 @@ export interface MetafileData {
   data: string;
   /** Optional filename associated with the data */
   name?: string;
+  /** Unique identifier for the bundle */
+  id: string;
+  /** When the bundle was created/uploaded */
+  createdAt: number;
 }
