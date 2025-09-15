@@ -120,3 +120,20 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Fix for details element chevron icons */
+details[open] summary .transition-opacity:first-child {
+  opacity: 0;
+}
+
+details[open] summary .transition-opacity:last-child {
+  opacity: 1;
+}
+
+details:not([open]) summary .transition-opacity:first-child {
+  opacity: 1;
+}
+
+details:not([open]) summary .transition-opacity:last-child {
+  opacity: 0;
+}

@@ -71,15 +71,15 @@ const FileTreeItem = React.memo<{
     }
 
     return (
-      <details open={!allCollapsed} className="group">
+      <details open={!allCollapsed}>
         <summary
           className="w-full text-left text-sm py-1 pl-1 pr-3 rounded-md transition-colors cursor-pointer overflow-hidden flex items-center justify-between list-none h-6 border border-transparent hover:bg-muted/50 hover:border-accent"
           style={{ paddingLeft: `${paddingLeft}px` }}
         >
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <div className="flex-shrink-0 w-3 h-3 relative">
-              <ChevronRight className="w-3 h-3 text-muted-foreground transition-opacity group-open:opacity-0" />
-              <ChevronDown className="w-3 h-3 text-muted-foreground transition-opacity absolute inset-0 opacity-0 group-open:opacity-100" />
+              <ChevronRight className="w-3 h-3 text-muted-foreground transition-opacity" />
+              <ChevronDown className="w-3 h-3 text-muted-foreground transition-opacity absolute inset-0 opacity-0" />
             </div>
             <Folder className="w-3 h-3 flex-shrink-0 text-muted-foreground" />
             <span className="truncate">
