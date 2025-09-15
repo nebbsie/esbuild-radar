@@ -47,15 +47,11 @@ export async function processUploadedFile(
       .filter((chunk): chunk is InitialChunkSummary => Boolean(chunk))
       .sort((a, b) => b.bytes - a.bytes); // Sort by size (largest first)
 
-    // Select the first chunk from the classified list (should always have at least one chunk)
-    const selectedChunk = allChunks.length > 0 ? allChunks[0] : null;
+    // Don't select any chunk initially - let the user choose
+    const selectedChunk = null;
 
-    // Determine selected module (entry point if it's included in the chunk)
-    const entryPointInChunk =
-      selectedChunk?.entryPoint &&
-      selectedChunk.includedInputs.includes(selectedChunk.entryPoint);
-    const selectedModule =
-      entryPointInChunk && selectedChunk ? selectedChunk.entryPoint : null;
+    // Don't auto-select any module
+    const selectedModule = null;
 
     return {
       metafile,

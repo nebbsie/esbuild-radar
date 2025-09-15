@@ -21,6 +21,7 @@ import {
   List,
   Minimize2,
   PieChart,
+  X,
 } from "lucide-react";
 import * as React from "react";
 
@@ -36,6 +37,7 @@ interface FilesPanelProps {
   onSelectModule: (mod: string) => void;
   selectedModule: string | null;
   chunkSearch: string;
+  onCloseChunk?: () => void;
 }
 
 export function FilesPanel({
@@ -50,6 +52,7 @@ export function FilesPanel({
   onSelectModule,
   selectedModule,
   chunkSearch,
+  onCloseChunk,
 }: FilesPanelProps) {
   const [viewMode, setViewMode] = React.useState<"tree" | "sunburst">(
     "sunburst"
@@ -59,21 +62,36 @@ export function FilesPanel({
       <CardHeader className="pb-0">
         <div className="flex flex-col">
           <div className="flex-1">
-            {selectedChunk && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0">
-                <span className="flex-1 h-[28px] inline-flex items-center gap-1 rounded-md border border-border bg-muted/50 px-2 py-0.5 min-w-0">
-                  <span className="truncate" title={selectedChunk.outputFile}>
-                    {selectedChunk.outputFile}
+            <div className="h-[28px] flex items-center gap-2 text-xs text-muted-foreground min-w-0">
+              {selectedChunk ? (
+                <>
+                  <span className="flex-1 inline-flex items-center gap-1 rounded-md border border-border bg-muted/50 px-2 py-0.5 min-w-0">
+                    <span className="truncate" title={selectedChunk.outputFile}>
+                      {selectedChunk.outputFile}
+                    </span>
                   </span>
-                </span>
 
-                <span className="flex-none h-[28px] inline-flex items-center whitespace-nowrap rounded-md border border-border bg-secondary px-2 py-0.5 text-secondary-foreground">
-                  {formatBytes(
-                    Math.max(0, (selectedChunk.bytes as number) || 0)
+                  <span className="flex-none inline-flex items-center whitespace-nowrap rounded-md border border-border bg-secondary px-2 py-0.5 text-secondary-foreground">
+                    {formatBytes(
+                      Math.max(0, (selectedChunk.bytes as number) || 0)
+                    )}
+                  </span>
+
+                  {onCloseChunk && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-[28px] w-[28px] p-0 hover:bg-accent flex-shrink-0"
+                      onClick={onCloseChunk}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
                   )}
-                </span>
-              </div>
-            )}
+                </>
+              ) : (
+                <span className="text-muted-foreground/60">All files</span>
+              )}
+            </div>
           </div>
 
           <div className="flex gap-1 justify-end pt-2">
