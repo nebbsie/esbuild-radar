@@ -15,3 +15,4 @@
 - Use functional components.
 - Put types in a common ./lib/types.ts file, try to use other types if it makes sense, don't just make a new one for each function etc.
 - If the type is only for a test put it in ./tests/test-types.ts
+- Dont run bun build for each change you make.

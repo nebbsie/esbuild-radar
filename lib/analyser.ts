@@ -349,10 +349,11 @@ export function classifyChunksFromInitial(
 
 // Compute an inclusion path from entry input to target input using the inputs graph.
 // Includes both static and dynamic imports.
-function findInclusionPathIncludingDynamic(
+function findInclusionPathInternal(
   meta: Metafile,
   entryInput: string,
-  targetInput: string
+  targetInput: string,
+  includeDynamic: boolean
 ): InclusionPathResult {
   if (entryInput === targetInput) return { found: true, path: [] };
 
@@ -367,13 +368,12 @@ function findInclusionPathIncludingDynamic(
     if (!node) continue;
     const edges = node.imports || [];
     for (const edge of edges) {
-      // Include both static and dynamic imports
+      if (!includeDynamic && edge.kind === "dynamic-import") continue;
       const next = edge.path;
       if (!visited.has(next)) {
         visited.add(next);
         parent[next] = { prev: current, kind: edge.kind };
         if (next === targetInput) {
-          // reconstruct
           const steps: InclusionStep[] = [];
           let cur = next;
           while (cur !== entryInput) {
@@ -390,6 +390,22 @@ function findInclusionPathIncludingDynamic(
   }
 
   return { found: false, path: [] };
+}
+
+function findInclusionPathIncludingDynamic(
+  meta: Metafile,
+  entryInput: string,
+  targetInput: string
+): InclusionPathResult {
+  // Prefer a static-only path if one exists; otherwise fall back to dynamic-inclusive
+  const staticOnly = findInclusionPathInternal(
+    meta,
+    entryInput,
+    targetInput,
+    false
+  );
+  if (staticOnly.found) return staticOnly;
+  return findInclusionPathInternal(meta, entryInput, targetInput, true);
 }
 
 /**
@@ -425,7 +441,7 @@ export function getInclusionPath(
     return [];
   }
 
-  // Determine which outputs are initial (contain the main entry point)
+  // Determine which outputs are initial (contain or are reached from the main entry output)
   const initialOutputs = chunks
     .filter((chunk) => chunk.isEntry && chunk.entryPoint === entryPoint)
     .map((chunk) => chunk.outputFile);
@@ -499,22 +515,45 @@ export function getImportSources(
       for (const imp of input.imports) {
         if (imp.path === targetFile) {
           // Find which chunk contains this importer
-          const chunkContainingImporter = chunks.find((chunk) =>
-            chunk.includedInputs.includes(inputPath)
-          );
+          const normalize = (p: string) => p.replace(/^\.\/+/, "");
+          const inputNorm = normalize(inputPath);
+          const chunkContainingImporter =
+            chunks.find((chunk) => chunk.includedInputs.includes(inputPath)) ||
+            chunks.find((chunk) =>
+              chunk.includedInputs.some(
+                (p) => p === inputPath || normalize(p).includes(inputNorm)
+              )
+            );
+
+          // Fallback: scan metafile.outputs to find an output that contains the importer
+          let fallbackOutput: string | undefined;
+          if (!chunkContainingImporter) {
+            for (const [outFile, out] of Object.entries(meta.outputs || {})) {
+              const inputs = Object.keys(out.inputs || {});
+              if (
+                inputs.includes(inputPath) ||
+                inputs.some((p) => normalize(p).includes(inputNorm))
+              ) {
+                fallbackOutput = outFile;
+                break;
+              }
+            }
+          }
 
           // Determine chunk type by checking if chunk output is in initial outputs
-          const chunkType =
-            chunkContainingImporter &&
-            initialOutputs.includes(chunkContainingImporter.outputFile)
-              ? "initial"
-              : "lazy";
+          const resolvedOutput =
+            chunkContainingImporter?.outputFile || fallbackOutput;
+          const chunkType = resolvedOutput
+            ? initialOutputs.includes(resolvedOutput)
+              ? ("initial" as const)
+              : ("lazy" as const)
+            : ("initial" as const);
 
           sources.push({
             importer: inputPath,
             importStatement: imp.original || imp.path,
             chunkType,
-            chunkOutputFile: chunkContainingImporter?.outputFile,
+            chunkOutputFile: resolvedOutput,
             chunkSize: chunkContainingImporter?.bytes,
             isDynamicImport: imp.kind === "dynamic-import",
           });

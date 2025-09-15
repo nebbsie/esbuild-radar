@@ -11,7 +11,7 @@ import { getImportSources, getInclusionPath } from "@/lib/analyser";
 import { getChunkLoadType } from "@/lib/chunk-utils";
 import { formatBytes } from "@/lib/format";
 import type { InitialChunkSummary, Metafile } from "@/lib/types";
-import { CornerDownRight, HelpCircle } from "lucide-react";
+import { CornerDownRight, Flag, HelpCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface InclusionPathSectionProps {
@@ -35,9 +35,32 @@ export function InclusionPathSection({
   initialSummary,
 }: InclusionPathSectionProps) {
   // Use the new getInclusionPath function to get import statements
-  const inclusionPath = selectedModule
+  let inclusionPath = selectedModule
     ? getInclusionPath(metafile, selectedModule, chunks)
     : [];
+
+  // Ensure the current file appears as the final step so users know where they are
+  if (
+    selectedModule &&
+    (inclusionPath.length === 0 ||
+      inclusionPath[inclusionPath.length - 1].file !== selectedModule)
+  ) {
+    const currentChunk = chunks.find((c) =>
+      c.includedInputs.includes(selectedModule)
+    );
+
+    inclusionPath = [
+      ...inclusionPath,
+      {
+        file: selectedModule,
+        importStatement: "", // leaf node – no import statement
+        importerChunkType: currentChunk
+          ? getChunkLoadType(currentChunk, initialSummary)
+          : "initial",
+        isDynamicImport: false,
+      },
+    ];
+  }
 
   // Get import sources to check if corresponding importers exist
   const importSources = selectedModule
@@ -166,9 +189,65 @@ export function InclusionPathSection({
     return null;
   }
 
+  // Group consecutive steps by their chunk (outputFile)
+  const groupedSteps = inclusionPath.reduce(
+    (groups, step, idx) => {
+      const normalize = (p: string) => p.replace(/^\.\/+/, "");
+      const stepFile = step.file;
+      const stepFileNorm = normalize(stepFile);
+
+      // Try to find chunk via provided chunks list
+      const chunkContainingFile =
+        chunks.find((chunk) => chunk.includedInputs.includes(stepFile)) ||
+        chunks.find((chunk) =>
+          chunk.includedInputs.some(
+            (input) =>
+              input === stepFile || normalize(input).includes(stepFileNorm)
+          )
+        );
+
+      // Fallback: scan metafile outputs when not found in chunks
+      let fallbackOutput: string | null = null;
+      if (!chunkContainingFile) {
+        for (const [outFile, out] of Object.entries(metafile.outputs || {})) {
+          const inputs = Object.keys(out.inputs || {});
+          if (
+            inputs.includes(stepFile) ||
+            inputs.some((inp) => normalize(inp).includes(stepFileNorm))
+          ) {
+            fallbackOutput = outFile;
+            break;
+          }
+        }
+      }
+
+      const lastGroup = groups[groups.length - 1];
+      const chunkName =
+        chunkContainingFile?.outputFile ||
+        fallbackOutput ||
+        lastGroup?.module ||
+        "Unknown Chunk";
+
+      if (lastGroup && lastGroup.module === chunkName) {
+        lastGroup.steps.push({ step, originalIndex: idx });
+      } else {
+        groups.push({
+          module: chunkName,
+          steps: [{ step, originalIndex: idx }],
+        });
+      }
+
+      return groups;
+    },
+    [] as Array<{
+      module: string;
+      steps: Array<{ step: (typeof inclusionPath)[0]; originalIndex: number }>;
+    }>
+  );
+
   return (
     <div className="space-y-2">
-      <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+      <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-1 mb-4">
         <span>Inclusion Path</span>
         <TooltipProvider>
           <Tooltip>
@@ -185,290 +264,313 @@ export function InclusionPathSection({
         </TooltipProvider>
       </h4>
 
-      <ol className="space-y-2">
-        {inclusionPath.map((step, idx) => {
-          // No hidden steps; always render the full path
-
-          const chunkContainingFile = chunks.find((chunk) =>
-            chunk.includedInputs.includes(step.file)
+      <ol className="space-y-3">
+        {groupedSteps.map((group, groupIdx) => {
+          const groupChunkForHeader = chunks.find(
+            (c) => c.outputFile === group.module
           );
-          // Try to resolve the imported module path for this step (to compute size delta)
-          const importerInput = metafile.inputs[step.file];
-          const matchedEdge = importerInput?.imports?.find(
-            (imp) => (imp.original || imp.path) === step.importStatement
-          );
-          const importedInputPath = matchedEdge?.path;
-          const rawImportText = step.importStatement.replace(
-            /^(["'])|(["'])$/g,
-            ""
-          );
-          const lookupPath = importedInputPath || rawImportText;
-          const normalizedImported = lookupPath
-            ? lookupPath.replace(/^\.\/+/, "")
-            : undefined;
-          const chunkForImported = lookupPath
-            ? chunks.find((chunk) =>
-                chunk.includedInputs.some(
-                  (p) =>
-                    p === lookupPath ||
-                    (normalizedImported
-                      ? p.includes(normalizedImported)
-                      : false)
-                )
-              )
-            : null;
-          // Reuse indicator removed per UX: we'll highlight in ImportedBySection on hover instead
-          const importedInputSize = (() => {
-            if (!lookupPath || !chunkForImported) return 0;
-            const out = metafile.outputs[chunkForImported.outputFile];
-            const info =
-              out?.inputs?.[lookupPath] ||
-              (normalizedImported
-                ? Object.entries(out?.inputs || {}).find(
-                    ([p]) => p === lookupPath || p.includes(normalizedImported)
-                  )?.[1]
-                : undefined);
-            return (
-              (info?.bytesInOutput as number | undefined) ||
-              (info?.bytes as number | undefined) ||
-              0
-            );
-          })();
-          const firstLazyIndex = inclusionPath.findIndex(
-            (s) => s.importerChunkType === "lazy"
-          );
-          const isFirstLazyBoundary =
-            idx === firstLazyIndex && firstLazyIndex !== -1;
-
-          // Determine created chunk for dynamic imports to show inline icon + tooltip
-          const createdChunk = step.isDynamicImport
-            ? (() => {
-                const dynamicImportPath = step.importStatement.replace(
-                  /^["']|["']$/g,
-                  ""
-                );
-                return (
-                  chunks.find((chunk) =>
-                    chunk.entryPoint.includes(
-                      dynamicImportPath.replace("./", "")
-                    )
-                  ) ||
-                  chunks.find((chunk) =>
-                    chunk.includedInputs.some((input) =>
-                      input.includes(dynamicImportPath.replace("./", ""))
-                    )
-                  ) ||
-                  null
-                );
-              })()
-            : null;
-
-          const isHighlightedByImported =
-            importedByHoverPath === step.file && importerPaths.has(step.file);
-          const isHighlightedByInclusion =
-            inclusionHoverPath === step.file && importerPaths.has(step.file);
-          const isHighlighted =
-            isHighlightedByImported || isHighlightedByInclusion;
+          const groupLoadType = groupChunkForHeader
+            ? getChunkLoadType(groupChunkForHeader, initialSummary)
+            : initialSummary?.initial.outputs.includes(group.module)
+              ? "initial"
+              : initialSummary?.lazy.outputs.includes(group.module)
+                ? "lazy"
+                : "initial";
           return (
-            <li
-              key={idx}
-              className={`py-1 px-2 rounded-md border cursor-pointer transition-colors ${
-                isHighlighted
-                  ? "bg-yellow-50 border-yellow-300"
-                  : "bg-muted/20 border-transparent hover:bg-muted/30"
-              }`}
-              onMouseEnter={() => {
-                const evt = new CustomEvent("inclusion-path-hover", {
-                  detail: { path: step.file },
-                });
-                window.dispatchEvent(evt);
-              }}
-              onMouseLeave={() => {
-                const evt = new CustomEvent("inclusion-path-hover", {
-                  detail: { path: null },
-                });
-                window.dispatchEvent(evt);
-              }}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="text-xs font-medium flex items-center gap-2 min-w-0">
-                      <span className="text-muted-foreground shrink-0">
-                        {idx + 1}.
-                      </span>
-                      <div className="shrink-0">
-                        <ChunkTypeIcon
-                          type={
-                            step.importerChunkType === "lazy"
-                              ? "lazy"
-                              : "initial"
-                          }
-                          variant="swatch"
-                        />
-                      </div>
-                      <span className="truncate min-w-0 overflow-hidden">
-                        {step.file}
-                      </span>
-                    </div>
+            <li key={groupIdx} className="space-y-2">
+              {/* Bordered section with title overlay */}
+              <div className="relative">
+                {/* Title positioned above/over the border */}
+                <div className="absolute -top-3.5 left-2 z-10">
+                  <div className="inline-flex items-center gap-2 px-1 py-1 rounded-md bg-background">
+                    <ChunkTypeIcon
+                      variant="swatch"
+                      type={groupLoadType}
+                      size={10}
+                    />
+                    <span className="text-[10px] font-medium text-muted-foreground">
+                      {group.module}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-1 mt-1">
-                    {step.isDynamicImport ? (
-                      <span className="text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1">
-                        <CornerDownRight size={12} />
-                        imports
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1">
-                        <CornerDownRight size={12} /> imports
-                      </span>
-                    )}
-                    <TooltipProvider>
-                      <Tooltip delayDuration={600}>
-                        <TooltipTrigger asChild>
-                          <code
-                            className="text-xs bg-muted px-1 py-0.5 rounded font-mono truncate hover:bg-muted/80 imported-path-item"
-                            data-path={step.file}
-                            onMouseEnter={() => {
-                              const evt = new CustomEvent(
-                                "inclusion-path-hover",
-                                {
-                                  detail: { path: step.file },
-                                }
-                              );
-                              window.dispatchEvent(evt);
-                            }}
-                            onMouseLeave={() => {
-                              const evt = new CustomEvent(
-                                "inclusion-path-hover",
-                                {
-                                  detail: { path: null },
-                                }
-                              );
-                              window.dispatchEvent(evt);
-                            }}
-                          >
-                            {step.importStatement}
-                          </code>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="max-w-xs">
-                          <div className="text-xs">
-                            <div className="font-medium">
-                              {step.importStatement}
-                            </div>
-                            {chunkContainingFile ? (
-                              <div className="text-muted-foreground mt-1">
-                                {chunkContainingFile.outputFile} (
-                                {formatBytes(chunkContainingFile.bytes)})
-                              </div>
-                            ) : (
-                              <div className="text-muted-foreground mt-1">
-                                No chunk information available
-                              </div>
-                            )}
-                          </div>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-
-                    {createdChunk && (
-                      <TooltipProvider>
-                        <Tooltip delayDuration={600}>
-                          <TooltipTrigger asChild>
-                            <span className="inline-flex items-center">
-                              <ChunkTypeIcon
-                                type="created"
-                                compact
-                                variant="icon"
-                                size={10}
-                                className="rounded-xs"
-                              />
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p className="text-xs">
-                              This dynamic import created a lazy-loaded chunk
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {" "}
-                              {createdChunk && (
-                                <span>
-                                  {` (${createdChunk.outputFile} - ${formatBytes(createdChunk.bytes)})`}
-                                </span>
-                              )}
-                            </p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-
-                    {importedInputPath && (
-                      <TooltipProvider>
-                        <Tooltip delayDuration={600}>
-                          <TooltipTrigger asChild>
-                            <span className="ml-1 text-[10px] text-muted-foreground whitespace-nowrap cursor-help">
-                              +{formatBytes(importedInputSize)}
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <div className="text-xs text-muted-foreground">
-                              {step.importerChunkType === "initial"
-                                ? `adds ~${formatBytes(importedInputSize)} to initial`
-                                : `defers ~${formatBytes(importedInputSize)} to lazy`}
-                            </div>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                    {/* Reuse badge removed; hover will cross-highlight in ImportedBySection */}
-                  </div>
-
-                  {/* Inline created module icon is rendered next to the label above */}
                 </div>
-                {isFirstLazyBoundary && (
-                  <TooltipProvider>
-                    <Tooltip delayDuration={600}>
-                      <TooltipTrigger asChild>
-                        <span className="ml-2 shrink-0 text-[10px] leading-none px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-200">
-                          First lazy boundary
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-sm">
-                        <div className="text-xs">
-                          <p className="mb-1">
-                            This step is inside a lazy-loaded chunk.
-                          </p>
-                          <p className="text-muted-foreground mb-1">
-                            A file may appear in an initial chunk elsewhere, yet
-                            this branch loads only when its dynamic path runs.
-                          </p>
-                          <div className="text-muted-foreground">
-                            <div className="font-medium text-foreground mb-1">
-                              Examples
+
+                {/* Bordered content area */}
+                <div className="pt-4 pb-2 px-3 border rounded-md border-muted bg-muted/10">
+                  {/* Steps in this chunk */}
+                  <ol className="space-y-1">
+                    {group.steps.map(({ step, originalIndex }, localIdx) => {
+                      // No hidden steps; always render the full path
+
+                      // We already found the chunk during grouping, but we need it again for the tooltip
+                      const chunkContainingFile = chunks.find((chunk) =>
+                        chunk.includedInputs.includes(step.file)
+                      );
+                      // Try to resolve the imported module path for this step (to compute size delta)
+                      const importerInput = metafile.inputs[step.file];
+                      const matchedEdge = importerInput?.imports?.find(
+                        (imp) =>
+                          (imp.original || imp.path) === step.importStatement
+                      );
+                      const importedInputPath = matchedEdge?.path;
+                      const rawImportText = step.importStatement.replace(
+                        /^(["'])|(["'])$/g,
+                        ""
+                      );
+                      const lookupPath = importedInputPath || rawImportText;
+                      const normalizedImported = lookupPath
+                        ? lookupPath.replace(/^\.\/+/, "")
+                        : undefined;
+                      const chunkForImported = lookupPath
+                        ? chunks.find((chunk) =>
+                            chunk.includedInputs.some(
+                              (p) =>
+                                p === lookupPath ||
+                                (normalizedImported
+                                  ? p.includes(normalizedImported)
+                                  : false)
+                            )
+                          )
+                        : null;
+                      // Reuse indicator removed per UX: we'll highlight in ImportedBySection on hover instead
+                      const importedInputSize = (() => {
+                        if (!lookupPath || !chunkForImported) return 0;
+                        const out =
+                          metafile.outputs[chunkForImported.outputFile];
+                        const info =
+                          out?.inputs?.[lookupPath] ||
+                          (normalizedImported
+                            ? Object.entries(out?.inputs || {}).find(
+                                ([p]) =>
+                                  p === lookupPath ||
+                                  p.includes(normalizedImported)
+                              )?.[1]
+                            : undefined);
+                        return (
+                          (info?.bytesInOutput as number | undefined) ||
+                          (info?.bytes as number | undefined) ||
+                          0
+                        );
+                      })();
+
+                      // Determine created chunk for dynamic imports to show inline icon + tooltip
+                      const createdChunk = step.isDynamicImport
+                        ? (() => {
+                            const dynamicImportPath =
+                              step.importStatement.replace(/^["']|["']$/g, "");
+                            return (
+                              chunks.find((chunk) =>
+                                chunk.entryPoint.includes(
+                                  dynamicImportPath.replace("./", "")
+                                )
+                              ) ||
+                              chunks.find((chunk) =>
+                                chunk.includedInputs.some((input) =>
+                                  input.includes(
+                                    dynamicImportPath.replace("./", "")
+                                  )
+                                )
+                              ) ||
+                              null
+                            );
+                          })()
+                        : null;
+
+                      const isHighlightedByImported =
+                        importedByHoverPath === step.file &&
+                        importerPaths.has(step.file);
+                      const isHighlightedByInclusion =
+                        inclusionHoverPath === step.file &&
+                        importerPaths.has(step.file);
+                      const isHighlighted =
+                        isHighlightedByImported || isHighlightedByInclusion;
+                      const isLastStep =
+                        groupIdx === groupedSteps.length - 1 &&
+                        localIdx === group.steps.length - 1;
+                      return (
+                        <li
+                          key={originalIndex}
+                          className={`py-1 px-2 rounded-md border cursor-pointer transition-colors ${
+                            isHighlighted
+                              ? "bg-yellow-50 border-yellow-300"
+                              : "bg-muted/20 border-transparent hover:bg-muted/30"
+                          }`}
+                          onMouseEnter={() => {
+                            const evt = new CustomEvent(
+                              "inclusion-path-hover",
+                              {
+                                detail: { path: step.file },
+                              }
+                            );
+                            window.dispatchEvent(evt);
+                          }}
+                          onMouseLeave={() => {
+                            const evt = new CustomEvent(
+                              "inclusion-path-hover",
+                              {
+                                detail: { path: null },
+                              }
+                            );
+                            window.dispatchEvent(evt);
+                          }}
+                          onClick={() => {
+                            const evt = new CustomEvent("navigate-to-module", {
+                              detail: {
+                                module: step.file,
+                                chunk: chunkContainingFile,
+                              },
+                            });
+                            window.dispatchEvent(evt);
+                          }}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className="text-xs font-medium flex items-center gap-2 min-w-0">
+                                  {!isLastStep && (
+                                    <span className="text-muted-foreground shrink-0">
+                                      {originalIndex + 1}.
+                                    </span>
+                                  )}
+                                  <span className="truncate min-w-0 overflow-hidden">
+                                    {step.file}
+                                  </span>
+                                  {isLastStep && (
+                                    <TooltipProvider>
+                                      <Tooltip delayDuration={600}>
+                                        <TooltipTrigger asChild>
+                                          <span className="inline-flex items-center bg-green-600 text-white rounded-xs p-0.5 ml-1">
+                                            <Flag size={10} />
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <div className="text-xs">
+                                            You are here
+                                          </div>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
+                                </div>
+                              </div>
+                              {!isLastStep && (
+                                <div className="mt-1 flex items-center gap-1">
+                                  {step.isDynamicImport ? (
+                                    <span className="text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1">
+                                      <CornerDownRight size={12} /> imports
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground whitespace-nowrap inline-flex items-center gap-1">
+                                      <CornerDownRight size={12} /> imports
+                                    </span>
+                                  )}
+                                  <TooltipProvider>
+                                    <Tooltip delayDuration={600}>
+                                      <TooltipTrigger asChild>
+                                        <code
+                                          className="text-xs bg-muted px-1 py-0.5 rounded font-mono truncate hover:bg-muted/80 imported-path-item"
+                                          data-path={step.file}
+                                          onMouseEnter={() => {
+                                            const evt = new CustomEvent(
+                                              "inclusion-path-hover",
+                                              {
+                                                detail: { path: step.file },
+                                              }
+                                            );
+                                            window.dispatchEvent(evt);
+                                          }}
+                                          onMouseLeave={() => {
+                                            const evt = new CustomEvent(
+                                              "inclusion-path-hover",
+                                              {
+                                                detail: { path: null },
+                                              }
+                                            );
+                                            window.dispatchEvent(evt);
+                                          }}
+                                        >
+                                          {step.importStatement}
+                                        </code>
+                                      </TooltipTrigger>
+                                      <TooltipContent
+                                        side="top"
+                                        className="max-w-xs"
+                                      >
+                                        <div className="text-xs">
+                                          <div className="font-medium">
+                                            {step.importStatement}
+                                          </div>
+                                          {chunkContainingFile ? (
+                                            <div className="text-muted-foreground mt-1">
+                                              {chunkContainingFile.outputFile} (
+                                              {formatBytes(
+                                                chunkContainingFile.bytes
+                                              )}
+                                              )
+                                            </div>
+                                          ) : (
+                                            <div className="text-muted-foreground mt-1">
+                                              No chunk information available
+                                            </div>
+                                          )}
+                                        </div>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                  {createdChunk && (
+                                    <>
+                                      <TooltipProvider>
+                                        <Tooltip delayDuration={600}>
+                                          <TooltipTrigger asChild>
+                                            <span className="inline-flex items-center text-blue-600 ml-1">
+                                              <ChunkTypeIcon
+                                                type="created"
+                                                compact
+                                                variant="icon"
+                                                size={10}
+                                                className="rounded-xs"
+                                              />
+                                            </span>
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <div className="text-xs">
+                                              Created lazy chunk:{" "}
+                                              {createdChunk.outputFile}
+                                            </div>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                              {/* End conditional import info */}
                             </div>
-                            <ul className="list-disc pl-4 space-y-1">
-                              <li>
-                                Route-level split: page code loads on
-                                navigation.
-                              </li>
-                              <li>
-                                Modal/editor opens and loads its code on demand.
-                              </li>
-                              <li>Feature flag: module loads when enabled.</li>
-                              <li>
-                                Vendor tool used only on a specific screen.
-                              </li>
-                              <li>
-                                Shared file: eager in one path, lazy here via
-                                import().
-                              </li>
-                            </ul>
+
+                            {importedInputPath && (
+                              <TooltipProvider>
+                                <Tooltip delayDuration={600}>
+                                  <TooltipTrigger asChild>
+                                    <span className="ml-1 text-[10px] text-muted-foreground whitespace-nowrap cursor-help">
+                                      +{formatBytes(importedInputSize)}
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <div className="text-xs">
+                                      {step.importerChunkType === "initial"
+                                        ? `adds ~${formatBytes(importedInputSize)} to initial`
+                                        : `defers ~${formatBytes(importedInputSize)} to lazy`}
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                            {/* Reuse badge removed; hover will cross-highlight in ImportedBySection */}
                           </div>
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </div>
               </div>
             </li>
           );

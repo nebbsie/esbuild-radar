@@ -9,7 +9,11 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { inferEntryForOutput, pickInitialOutput } from "@/lib/analyser";
-import { createChunkSummaries, filterChunks } from "@/lib/chunk-utils";
+import {
+  createChunkSummaries,
+  filterChunks,
+  getChunkLoadType,
+} from "@/lib/chunk-utils";
 import { processUploadedFile as processUploadedFileUtil } from "@/lib/file-utils";
 import { estimateBrotliSize, estimateGzipSize } from "@/lib/format";
 import { usePersistentState } from "@/lib/hooks/use-persistent-state";
@@ -356,11 +360,32 @@ export default function ResultsPage() {
     navigateToModule(mod);
   }
 
-  // Filter chunks based on search term and chunk type
-  const filteredChunks = React.useMemo(
-    () => filterChunks(chunks, chunkSearch, chunkTypeFilters, initialSummary),
-    [chunks, chunkSearch, chunkTypeFilters, initialSummary]
-  );
+  // Filter chunks based on search term and chunk type (include chunk filename/entryPoint matches)
+  const filteredChunks = React.useMemo(() => {
+    const base = filterChunks(
+      chunks,
+      chunkSearch,
+      chunkTypeFilters,
+      initialSummary
+    );
+    if (!chunkSearch) return base;
+
+    const searchLower = chunkSearch.toLowerCase();
+    const extra = chunks.filter((chunk) => {
+      const nameMatch =
+        chunk.outputFile.toLowerCase().includes(searchLower) ||
+        (chunk.entryPoint || "").toLowerCase().includes(searchLower);
+      if (!nameMatch) return false;
+      const type = getChunkLoadType(chunk, initialSummary);
+      return chunkTypeFilters[type];
+    });
+
+    // Merge base and extra by outputFile to avoid duplicates
+    const byId = new Map(base.map((c) => [c.outputFile, c] as const));
+    for (const c of extra)
+      if (!byId.has(c.outputFile)) byId.set(c.outputFile, c);
+    return Array.from(byId.values());
+  }, [chunks, chunkSearch, chunkTypeFilters, initialSummary]);
 
   // Components are now extracted to separate files
 

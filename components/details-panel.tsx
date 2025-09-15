@@ -14,6 +14,7 @@ import {
 import { ModuleNavigationHistory } from "@/lib/navigation-utils";
 import type { InitialChunkSummary, Metafile } from "@/lib/types";
 import { ArrowLeft } from "lucide-react";
+import React from "react";
 
 interface DetailsPanelProps {
   metafile: Metafile;
@@ -45,6 +46,27 @@ export function DetailsPanel({
   goBackToPreviousModule,
   navigateToModule,
 }: DetailsPanelProps) {
+  // Handle navigation event from child sections (e.g., created chunks)
+  React.useEffect(() => {
+    const handler = (e: Event) => {
+      const ce = e as CustomEvent<{
+        module: string;
+        chunk?: InitialChunkSummary;
+      }>;
+      const nextModule = ce.detail?.module;
+      const nextChunk = ce.detail?.chunk;
+      if (nextModule) {
+        // Add to history when navigating from any details sub-section
+        navigateToModule(nextModule, nextChunk, "push");
+      }
+    };
+    window.addEventListener("navigate-to-module", handler as EventListener);
+    return () =>
+      window.removeEventListener(
+        "navigate-to-module",
+        handler as EventListener
+      );
+  }, [navigateToModule]);
   return (
     <Card className="h-full">
       {selectedModule && (
@@ -102,8 +124,6 @@ export function DetailsPanel({
           selectedModule={selectedModule}
           chunks={chunks}
           initialOutputs={initialSummary?.initial.outputs || []}
-          initialChunk={initialChunk}
-          navigateToModule={navigateToModule}
         />
 
         <ModulesCreatedSection

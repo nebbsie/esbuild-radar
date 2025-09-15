@@ -1,6 +1,5 @@
 "use client";
 
-import { ChunkTypeIcon } from "@/components/chunk-type-icon";
 import {
   Tooltip,
   TooltipContent,
@@ -34,7 +33,7 @@ export function ModulesCreatedSection({
   return (
     <div className="space-y-2">
       <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-        <span>Modules Created ({createdChunks.length})</span>
+        <span>Lazy Modules Created ({createdChunks.length})</span>
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -54,11 +53,20 @@ export function ModulesCreatedSection({
           return (
             <div
               key={idx}
-              className="flex items-start gap-2 p-2 rounded-md border bg-card hover:bg-accent/50 transition-colors"
+              className="flex items-start gap-2 p-2 rounded-md border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
+              onClick={() => {
+                // Open the created chunk's entry point if available; otherwise open the first included input
+                const entry = created.chunk.entryPoint;
+                const targetModule = entry || created.chunk.includedInputs[0];
+                if (!targetModule) return;
+                const evt = new CustomEvent("navigate-to-module", {
+                  detail: { module: targetModule, chunk: created.chunk },
+                });
+                window.dispatchEvent(evt);
+              }}
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <ChunkTypeIcon variant="swatch" type="lazy" size={10} />
                   <span
                     className="text-xs font-medium truncate"
                     title={created.chunk.outputFile}
