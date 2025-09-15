@@ -134,7 +134,7 @@ export function BundleTopBar({
   }, [switchBundle]);
 
   if (isLoading) {
-    return null;
+    return <div className="mb-3 min-h-[32px]"> </div>;
   }
 
   return (

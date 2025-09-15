@@ -2,8 +2,11 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { parseMetafile } from "@/lib/metafile";
 import { metafileStorage } from "@/lib/storage";
+import type { MetafileData } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 
@@ -12,9 +15,37 @@ export default function UploadPage() {
   const [isDragOver, setIsDragOver] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [metafileName, setMetafileName] = React.useState("");
+  const [savedBundles, setSavedBundles] = React.useState<MetafileData[]>([]);
+  const [currentBundleId, setCurrentBundleId] = React.useState<string | null>(
+    null
+  );
+  const [loadingSaved, setLoadingSaved] = React.useState(true);
 
   // Do not clear existing bundles on mount; allow multiple tabs
-  React.useEffect(() => {}, []);
+  React.useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        // Load saved bundles and the last opened one
+        const [bundles, currentId] = await Promise.all([
+          metafileStorage.getAllBundles(),
+          metafileStorage.getCurrentBundleId(),
+        ]);
+        if (!isMounted) return;
+        // Show newest first
+        const sorted = [...bundles].sort((a, b) => b.createdAt - a.createdAt);
+        setSavedBundles(sorted);
+        setCurrentBundleId(currentId);
+      } catch (err) {
+        console.error("Failed to read saved bundles:", err);
+      } finally {
+        if (isMounted) setLoadingSaved(false);
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   function onChooseFile() {
     fileInputRef.current?.click();
@@ -85,6 +116,19 @@ export default function UploadPage() {
     setIsDragOver(false);
   }
 
+  async function openBundle(bundleId: string) {
+    try {
+      await metafileStorage.setCurrentBundle(bundleId);
+      router.push("/results");
+    } catch (err) {
+      console.error("Failed to open saved bundle:", err);
+      alert(
+        "Failed to open saved bundle: " +
+          (err instanceof Error ? err.message : "Unknown error")
+      );
+    }
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center p-2 sm:p-4">
       <Card className="w-full max-w-md">
@@ -100,6 +144,47 @@ export default function UploadPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {!loadingSaved && savedBundles.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Saved bundles</span>
+                {currentBundleId && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => openBundle(currentBundleId)}
+                  >
+                    Reopen last opened
+                  </Button>
+                )}
+              </div>
+              <ScrollArea className="h-36 rounded-md border border-border">
+                <div className="p-2">
+                  {savedBundles.map((b, idx) => (
+                    <div key={b.id} className="py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium">
+                            {b.name || "stats.json"}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(b.createdAt).toLocaleString()}
+                          </div>
+                        </div>
+                        <Button size="sm" onClick={() => openBundle(b.id)}>
+                          Open
+                        </Button>
+                      </div>
+                      {idx < savedBundles.length - 1 && (
+                        <Separator className="my-2" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+          )}
+
           <div className="space-y-2">
             <label htmlFor="metafile-name" className="text-sm font-medium">
               Metafile Name (optional)

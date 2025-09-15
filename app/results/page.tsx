@@ -65,18 +65,18 @@ export default function ResultsPage() {
   const [selectedChunk, setSelectedChunk] =
     React.useState<InitialChunkSummary | null>(null);
   const [selectedModule, setSelectedModule] = React.useState<string | null>(
-    null
+    null,
   );
   const [isDetailsOpen, setIsDetailsOpen] = React.useState<boolean>(true);
   const [viewportWidth, setViewportWidth] = React.useState<number>(
-    typeof window !== "undefined" ? window.innerWidth : 1440
+    typeof window !== "undefined" ? window.innerWidth : 1440,
   );
   const [, setInclusion] = React.useState<InclusionPathResult | null>(null);
   const [metafileName, setMetafileName] = React.useState<string>("");
   const [initialChunk, setInitialChunk] =
     React.useState<InitialChunkSummary | null>(null);
   const [currentBundleId, setCurrentBundleId] = React.useState<string | null>(
-    null
+    null,
   );
 
   // Update page title when metafile name changes
@@ -92,27 +92,27 @@ export default function ResultsPage() {
   // Load persisted settings
   const [showNodeModules, setShowNodeModules] = usePersistentState<boolean>(
     STORAGE_KEYS.NODE_MODULES,
-    false
+    false,
   );
   const [showFullPaths, setShowFullPaths] = usePersistentState<boolean>(
     STORAGE_KEYS.FULL_PATHS,
-    false
+    false,
   );
   const [allCollapsed, setAllCollapsed] = usePersistentState<boolean>(
     STORAGE_KEYS.ALL_COLLAPSED,
-    false
+    false,
   );
   const [chunkTypeFilters, setChunkTypeFilters] = usePersistentState(
     STORAGE_KEYS.CHUNK_FILTERS,
-    DEFAULT_FILTERS
+    DEFAULT_FILTERS,
   );
   const [savedLayout3, setSavedLayout3] = usePersistentState<number[]>(
     STORAGE_KEYS.PANEL_LAYOUT_3,
-    []
+    [],
   );
   const [savedLayout2, setSavedLayout2] = usePersistentState<number[]>(
     STORAGE_KEYS.PANEL_LAYOUT_2,
-    []
+    [],
   );
 
   const [chunkSearch, setChunkSearch] = React.useState("");
@@ -128,7 +128,7 @@ export default function ResultsPage() {
     (
       modulePath: string,
       chunk?: InitialChunkSummary,
-      historyMode: "push" | "reset" | "none" = "none"
+      historyMode: "push" | "reset" | "none" = "none",
     ) => {
       // Handle history based on the mode
       if (historyMode === "reset") {
@@ -148,7 +148,7 @@ export default function ResultsPage() {
         chunks,
         metafile,
         initialChunk,
-        chunk || selectedChunk
+        chunk || selectedChunk,
       );
 
       setSelectedModule(result.selectedModule);
@@ -165,7 +165,7 @@ export default function ResultsPage() {
       // Scroll to the module after DOM updates
       setTimeout(() => {
         const selectedElement = document.querySelector(
-          '[data-selected-module="true"]'
+          '[data-selected-module="true"]',
         );
         if (selectedElement) {
           selectedElement.scrollIntoView({
@@ -182,7 +182,7 @@ export default function ResultsPage() {
       initialChunk,
       selectedChunk,
       moduleHistory,
-    ]
+    ],
   );
 
   const goBackToPreviousModule = React.useCallback(() => {
@@ -192,7 +192,7 @@ export default function ResultsPage() {
       if (previousModule) {
         // Find the chunk containing the previous module
         const chunkContainingFile = chunks.find((chunk) =>
-          chunk.includedInputs.includes(previousModule)
+          chunk.includedInputs.includes(previousModule),
         );
 
         if (chunkContainingFile) {
@@ -354,7 +354,7 @@ export default function ResultsPage() {
       if (entryPointInChunk) {
         setTimeout(() => {
           const selectedElement = document.querySelector(
-            '[data-selected-module="true"]'
+            '[data-selected-module="true"]',
           );
           if (selectedElement) {
             selectedElement.scrollIntoView({
@@ -370,7 +370,7 @@ export default function ResultsPage() {
       clearData();
       alert(
         "Invalid esbuild metafile JSON: " +
-          (err instanceof Error ? err.message : "Unknown error")
+          (err instanceof Error ? err.message : "Unknown error"),
       );
     }
   }, []);
@@ -414,7 +414,7 @@ export default function ResultsPage() {
         await loadBundleData(bundleData);
       }
     },
-    [loadBundleData]
+    [loadBundleData],
   );
 
   // Handle bundle deletion
@@ -423,7 +423,7 @@ export default function ResultsPage() {
     if (remainingBundles.length > 0) {
       // Load the last bundle (keep UX consistent)
       await handleBundleChange(
-        remainingBundles[remainingBundles.length - 1].id
+        remainingBundles[remainingBundles.length - 1].id,
       );
     } else {
       // No bundles left, redirect to upload
@@ -441,7 +441,7 @@ export default function ResultsPage() {
       chunks,
       chunkSearch,
       chunkTypeFilters,
-      initialSummary
+      initialSummary,
     );
     if (!chunkSearch) return base;
 
@@ -475,21 +475,21 @@ export default function ResultsPage() {
       // Get all chunks that contain the search term (from filteredChunks)
       const matchingChunks = filteredChunks.filter((chunk) =>
         chunk.includedInputs.some((input) =>
-          input.toLowerCase().includes(chunkSearch.toLowerCase())
-        )
+          input.toLowerCase().includes(chunkSearch.toLowerCase()),
+        ),
       );
 
       if (matchingChunks.length === 0) return;
 
       // Find current chunk index
       const currentChunkIndex = matchingChunks.findIndex(
-        (chunk) => chunk === selectedChunk
+        (chunk) => chunk === selectedChunk,
       );
       let targetChunkIndex = currentChunkIndex;
 
       // Get highlighted elements in current chunk
       const currentHighlightedElements = Array.from(
-        document.querySelectorAll(".bg-yellow-200, .bg-yellow-800")
+        document.querySelectorAll(".bg-yellow-200, .bg-yellow-800"),
       ).filter((el) => {
         return el.closest("[data-chunk-contents]");
       });
@@ -532,7 +532,7 @@ export default function ResultsPage() {
           // Wait for DOM update, then get highlighted elements in new chunk
           setTimeout(() => {
             const prevHighlightedElements = Array.from(
-              document.querySelectorAll(".bg-yellow-200, .bg-yellow-800")
+              document.querySelectorAll(".bg-yellow-200, .bg-yellow-800"),
             ).filter((el) => el.closest("[data-chunk-contents]"));
 
             if (prevHighlightedElements.length > 0) {
@@ -573,7 +573,7 @@ export default function ResultsPage() {
         // Wait for DOM update, then navigate to first result in new chunk
         setTimeout(() => {
           const newHighlightedElements = Array.from(
-            document.querySelectorAll(".bg-yellow-200, .bg-yellow-800")
+            document.querySelectorAll(".bg-yellow-200, .bg-yellow-800"),
           ).filter((el) => el.closest("[data-chunk-contents]"));
 
           if (newHighlightedElements.length > 0) {
@@ -605,7 +605,7 @@ export default function ResultsPage() {
       selectedChunk,
       searchResultIndex,
       navigateToModule,
-    ]
+    ],
   );
 
   // Handle Enter key in search input
@@ -618,7 +618,7 @@ export default function ResultsPage() {
         }
       }
     },
-    [chunkSearch, navigateSearchResult]
+    [chunkSearch, navigateSearchResult],
   );
 
   // Compute default 3-panel layout with responsive targets (~290px left, ~750px middle)
@@ -660,7 +660,7 @@ export default function ResultsPage() {
       savedLayout3.length === 3
         ? (savedLayout3 as [number, number, number])
         : defaultLayout3,
-    [savedLayout3, defaultLayout3]
+    [savedLayout3, defaultLayout3],
   );
 
   const layout2 = React.useMemo<[number, number]>(
@@ -668,7 +668,7 @@ export default function ResultsPage() {
       savedLayout2.length === 2
         ? (savedLayout2 as [number, number])
         : defaultLayout2,
-    [savedLayout2, defaultLayout2]
+    [savedLayout2, defaultLayout2],
   );
 
   const twoPanelSizes = React.useMemo((): { left: number; middle: number } => {
@@ -706,7 +706,7 @@ export default function ResultsPage() {
       determineModuleSelectionForChunkChange(
         filteredChunks,
         selectedModule,
-        selectedChunk
+        selectedChunk,
       );
 
     if (newChunk !== selectedChunk) {
@@ -718,7 +718,7 @@ export default function ResultsPage() {
       if (newModule) {
         setTimeout(() => {
           const selectedElement = document.querySelector(
-            '[data-selected-module="true"]'
+            '[data-selected-module="true"]',
           );
           if (selectedElement) {
             selectedElement.scrollIntoView({
@@ -767,7 +767,7 @@ export default function ResultsPage() {
 
       // Store the new metafile
       await metafileStorage.storeMetafile(
-        JSON.stringify(processedData.metafile)
+        JSON.stringify(processedData.metafile),
       );
 
       // Update state with processed data
@@ -784,7 +784,7 @@ export default function ResultsPage() {
       if (processedData.selectedModule) {
         setTimeout(() => {
           const selectedElement = document.querySelector(
-            '[data-selected-module="true"]'
+            '[data-selected-module="true"]',
           );
           if (selectedElement) {
             selectedElement.scrollIntoView({
@@ -920,6 +920,16 @@ export default function ResultsPage() {
         onChange={handleFileChange}
         className="hidden"
       />
+
+      <div className="mt-2 flex justify-between">
+        <p className="font-mono text-xs text-muted-foreground">
+          *still in development
+        </p>
+
+        <p className="font-mono text-xs text-muted-foreground">
+          esbuildradar.com
+        </p>
+      </div>
     </div>
   );
 }
