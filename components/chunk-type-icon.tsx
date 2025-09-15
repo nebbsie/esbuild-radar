@@ -49,7 +49,7 @@ export function ChunkTypeIcon({
   if (variant === "swatch") {
     return (
       <div
-        className={`${color} ${className} rounded-xs`}
+        className={`${color} ${className} rounded-md`}
         style={{ width: 8, height: 8 }}
         aria-hidden
       />

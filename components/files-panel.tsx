@@ -2,19 +2,14 @@
 
 import { FileTree } from "@/components/file-tree";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { formatBytes } from "@/lib/format";
 import { buildPathTree } from "@/lib/path-tree";
 import type { InitialChunkSummary, Metafile } from "@/lib/types";
 import { Eye, EyeOff, File, FileText, Minimize2 } from "lucide-react";
@@ -47,18 +42,28 @@ export function FilesPanel({
   chunkSearch,
 }: FilesPanelProps) {
   return (
-    <Card className="h-full">
-      <CardHeader>
-        <div className="flex items-center justify-between">
+    <Card className="h-full gap-0">
+      <CardHeader className="pb-0">
+        <div className="flex flex-col">
           <div className="flex-1">
-            <CardTitle>Files In Selected Chunk</CardTitle>
-            <CardDescription>
-              {selectedChunk
-                ? `Files included in ${selectedChunk.outputFile}`
-                : "Select a chunk to see its files."}
-            </CardDescription>
+            {selectedChunk && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0">
+                <span className="flex-1 h-[28px] inline-flex items-center gap-1 rounded-md border border-border bg-muted/50 px-2 py-0.5 min-w-0">
+                  <span className="truncate" title={selectedChunk.outputFile}>
+                    {selectedChunk.outputFile}
+                  </span>
+                </span>
+
+                <span className="flex-none h-[28px] inline-flex items-center whitespace-nowrap rounded-md border border-border bg-secondary px-2 py-0.5 text-secondary-foreground">
+                  {formatBytes(
+                    Math.max(0, (selectedChunk.bytes as number) || 0)
+                  )}
+                </span>
+              </div>
+            )}
           </div>
-          <div className="flex gap-1">
+
+          <div className="flex gap-1 justify-end pt-2">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -133,10 +138,10 @@ export function FilesPanel({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="flex flex-col h-full overflow-hidden px-3 py-2">
+      <CardContent className="flex flex-col h-full overflow-hidden px-3">
         <div className="flex flex-col h-full">
-          <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-            <div className="space-y-2 px-1" data-chunk-contents>
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="space-y-2" data-chunk-contents>
               {(() => {
                 let files: Array<{ path: string; size: number }>;
 

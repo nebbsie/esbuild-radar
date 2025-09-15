@@ -53,7 +53,7 @@ export function ModulesCreatedSection({
           return (
             <div
               key={idx}
-              className="flex items-start gap-2 p-2 rounded-md border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
+              className="flex items-start gap-2 p-2 rounded-md border bg-muted/40 border-transparent hover:bg-accent/70 transition-colors cursor-pointer"
               onClick={() => {
                 // Open the created chunk's entry point if available; otherwise open the first included input
                 const entry = created.chunk.entryPoint;
@@ -66,7 +66,7 @@ export function ModulesCreatedSection({
               }}
             >
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-1 mb-1">
                   <span
                     className="text-xs font-medium truncate"
                     title={created.chunk.outputFile}

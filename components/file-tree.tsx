@@ -48,10 +48,10 @@ const FileTreeItem = React.memo<{
       return (
         <button
           onClick={() => onSelectFile(node.path)}
-          className={`w-full text-left text-sm py-1 px-2 rounded-md hover:bg-accent transition-colors cursor-pointer overflow-hidden flex items-center justify-between group border ${
+          className={`w-full text-left text-sm py-1 pl-1 pr-3 rounded-md transition-colors cursor-pointer overflow-hidden flex items-center justify-between group border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 h-6 ${
             isSelected
-              ? "bg-accent/80 text-accent-foreground border-primary ring-1 ring-primary/20 shadow-sm"
-              : "border-transparent hover:bg-muted/50"
+              ? "bg-muted text-foreground border-border"
+              : "border-transparent hover:bg-muted/50 hover:border-accent"
           }`}
           title={node.path}
           style={{ paddingLeft: `${paddingLeft}px` }}
@@ -73,7 +73,7 @@ const FileTreeItem = React.memo<{
     return (
       <details open={!allCollapsed} className="group">
         <summary
-          className="w-full text-left text-sm py-1 px-2 rounded-md hover:bg-accent transition-colors cursor-pointer overflow-hidden flex items-center justify-between list-none"
+          className="w-full text-left text-sm py-1 pl-1 pr-3 rounded-md transition-colors cursor-pointer overflow-hidden flex items-center justify-between list-none h-6 border border-transparent hover:bg-muted/50 hover:border-accent"
           style={{ paddingLeft: `${paddingLeft}px` }}
         >
           <div className="flex items-center gap-2 min-w-0 flex-1">

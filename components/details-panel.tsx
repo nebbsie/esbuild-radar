@@ -5,16 +5,13 @@ import { InclusionPathSection } from "@/components/inclusion-path-section";
 import { ModulesCreatedSection } from "@/components/modules-created-section";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+// Removed unused tooltip imports
 import { ModuleNavigationHistory } from "@/lib/navigation-utils";
 import type { InitialChunkSummary, Metafile } from "@/lib/types";
 import { ArrowLeft } from "lucide-react";
 import React from "react";
+import { Separator } from "@/components/ui/separator";
+// Removed unused formatBytes import
 
 interface DetailsPanelProps {
   metafile: Metafile;
@@ -31,7 +28,7 @@ interface DetailsPanelProps {
   navigateToModule: (
     modulePath: string,
     chunk?: InitialChunkSummary,
-    historyMode?: "push" | "reset" | "none"
+    historyMode?: "push" | "reset" | "none",
   ) => void;
 }
 
@@ -64,39 +61,30 @@ export function DetailsPanel({
     return () =>
       window.removeEventListener(
         "navigate-to-module",
-        handler as EventListener
+        handler as EventListener,
       );
   }, [navigateToModule]);
   return (
-    <Card className="h-full">
+    <Card className="h-full gap-0">
       {selectedModule && (
-        <CardHeader className="px-3 py-3 pb-2">
-          <div className="flex items-center gap-3">
-            {moduleHistory.hasPrevious() && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={goBackToPreviousModule}
-                      className="h-7 w-7 p-0 hover:bg-accent flex-shrink-0"
-                    >
-                      <ArrowLeft className="h-3.5 w-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">
-                    <p>Go back to previous file</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
+        <CardHeader className="pb-0">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="flex-1 min-w-0">
-              <CardTitle
-                className="text-sm font-medium text-foreground truncate"
-                title={selectedModule}
-              >
-                {selectedModule}
+              <CardTitle className="flex items-center gap-2 min-w-0">
+                {moduleHistory.hasPrevious() && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={goBackToPreviousModule}
+                    className="h-[28px] w-[28px] p-0 hover:bg-accent flex-shrink-0"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+
+                <span className="flex-1 min-w-0 text-xs text-muted-foreground border border-border bg-muted/50 rounded-md px-2 py-0.5 h-[28px] flex items-center">
+                  <span className="truncate">{selectedModule}</span>
+                </span>
               </CardTitle>
             </div>
           </div>

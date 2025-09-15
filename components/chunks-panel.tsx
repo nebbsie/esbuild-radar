@@ -4,13 +4,7 @@ import { ChunkTypeIcon } from "@/components/chunk-type-icon";
 import { Badge } from "@/components/ui/badge";
 import { BundleStatsSection } from "@/components/ui/bundle-stats-section";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Tooltip,
   TooltipContent,
@@ -24,8 +18,7 @@ import type {
   InitialChunkSummary,
   Metafile,
 } from "@/lib/types";
-import { Clock, Filter, Search, Upload, X, Zap } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { Clock, Filter, Search, X, Zap } from "lucide-react";
 
 interface ChunksPanelProps {
   metafile: Metafile;
@@ -46,7 +39,7 @@ interface ChunksPanelProps {
   navigateToModule: (
     modulePath: string,
     chunk?: InitialChunkSummary,
-    historyMode?: "push" | "reset" | "none"
+    historyMode?: "push" | "reset" | "none",
   ) => void;
   initialChunk: InitialChunkSummary | null;
   setSelectedModule: (module: string | null) => void;
@@ -74,36 +67,9 @@ export function ChunksPanel({
   setSelectedChunk,
   setInclusion,
 }: ChunksPanelProps) {
-  const router = useRouter();
   return (
     <Card className="h-full">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div className="flex-1">
-            <CardTitle>Chunks</CardTitle>
-            <CardDescription>All chunks in your app.</CardDescription>
-          </div>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => router.push("/upload")}
-                  className="p-2 cursor-pointer"
-                >
-                  <Upload className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Upload new metafile</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col h-full px-3 py-2 overflow-hidden">
-        {/* Initial Code Section */}
+      <CardContent className="flex flex-col h-full px-3 overflow-hidden">
         <BundleStatsSection
           title="Initial"
           chunks={initialChunks}
@@ -115,7 +81,6 @@ export function ChunksPanel({
           description="Code loaded immediately on page load"
         />
 
-        {/* Lazy Code Section */}
         <BundleStatsSection
           title="Lazy"
           chunks={lazyChunks}
@@ -127,7 +92,6 @@ export function ChunksPanel({
           description="Code loaded on-demand when needed"
         />
 
-        {/* Search input with filter button */}
         <div className="flex-shrink-0 mb-3">
           <div className="flex items-center gap-2 w-full">
             <div className="relative flex-1">
@@ -152,25 +116,15 @@ export function ChunksPanel({
 
             {/* Filter Menu Button */}
             <div className="relative filter-menu-container">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowFilterMenu(!showFilterMenu)}
-                      className="h-8 w-8 p-0 cursor-pointer"
-                    >
-                      <Filter className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Filter chunks by type</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowFilterMenu(!showFilterMenu)}
+                className="h-8 w-8 p-0 cursor-pointer"
+              >
+                <Filter className="h-4 w-4" />
+              </Button>
 
-              {/* Filter Dropdown Menu */}
               {showFilterMenu && (
                 <div className="absolute top-full mt-1 right-0 z-50 w-40 bg-background border border-border rounded-md shadow-lg py-1">
                   <div className="p-1 space-y-1">
@@ -218,8 +172,8 @@ export function ChunksPanel({
           )}
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-          <div className="space-y-2 px-1">
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="space-y-2">
             {filteredChunks.length === 0 && chunks.length > 0 && (
               <p className="text-sm text-muted-foreground">
                 No chunks match your search.
@@ -230,7 +184,7 @@ export function ChunksPanel({
             )}
             {filteredChunks.map((c) => {
               const loadType = initialChunks.some(
-                (chunk) => chunk.outputFile === c.outputFile
+                (chunk) => chunk.outputFile === c.outputFile,
               )
                 ? "initial"
                 : "lazy";
@@ -238,6 +192,7 @@ export function ChunksPanel({
               const isMainEntryChunk =
                 initialChunk?.outputFile === c.outputFile;
               const iconType = isMainEntryChunk ? "main-entry" : loadType;
+              const isSelected = selectedChunk?.outputFile === c.outputFile;
 
               return (
                 <button
@@ -256,10 +211,10 @@ export function ChunksPanel({
                       setInclusion(inclusionPath);
                     }
                   }}
-                  className={`w-full text-left rounded-md border p-1.5 transition-colors hover:bg-accent ${
-                    selectedChunk?.outputFile === c.outputFile
-                      ? "bg-accent border-primary ring-1 ring-primary/20 shadow-sm"
-                      : "bg-background border-border hover:border-accent"
+                  className={`group w-full text-left cursor-pointer rounded-md border p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 ${
+                    isSelected
+                      ? "bg-muted border-border"
+                      : "bg-background border-transparent hover:bg-muted/50 hover:border-accent"
                   }`}
                 >
                   <div className="flex items-center gap-2">
@@ -270,22 +225,14 @@ export function ChunksPanel({
                     />
                     <div className="min-w-0 flex-1">
                       <div
-                        className={`truncate text-sm ${
-                          selectedChunk?.outputFile === c.outputFile
-                            ? "text-primary"
-                            : ""
-                        }`}
+                        className={`truncate text-sm ${isSelected ? "font-medium" : ""}`}
                         title={c.outputFile}
                       >
                         {c.outputFile}
                       </div>
                     </div>
                     <Badge
-                      variant={
-                        selectedChunk?.outputFile === c.outputFile
-                          ? "default"
-                          : "secondary"
-                      }
+                      variant={isSelected ? "default" : "secondary"}
                       className="flex-shrink-0 text-xs"
                     >
                       {formatBytes(c.bytes)}

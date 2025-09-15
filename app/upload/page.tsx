@@ -33,14 +33,14 @@ export default function UploadPage() {
       // Store in IndexedDB using the storage service
       await metafileStorage.storeMetafile(
         JSON.stringify(json),
-        metafileName || "Demo Metafile"
+        metafileName || "Demo Metafile",
       );
       router.push("/results");
     } catch (err) {
       console.error("Failed to load demo metafile:", err);
       alert(
         "Failed to load demo metafile: " +
-          (err instanceof Error ? err.message : "Unknown error")
+          (err instanceof Error ? err.message : "Unknown error"),
       );
     }
   }
@@ -54,14 +54,14 @@ export default function UploadPage() {
       // Store in IndexedDB using the storage service
       await metafileStorage.storeMetafile(
         JSON.stringify(json),
-        metafileName || undefined
+        metafileName || undefined,
       );
       router.push("/results");
     } catch (err) {
       console.error("Failed to process metafile:", err);
       alert(
         "Failed to process metafile: " +
-          (err instanceof Error ? err.message : "Unknown error")
+          (err instanceof Error ? err.message : "Unknown error"),
       );
     }
   }
@@ -117,7 +117,7 @@ export default function UploadPage() {
             />
           </div>
           <div
-            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+            className={`border-2 border-dashed rounded-md p-8 text-center transition-colors ${
               isDragOver
                 ? "border-primary bg-primary/10"
                 : "border-muted-foreground/25"

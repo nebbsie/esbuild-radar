@@ -27,10 +27,10 @@ export function ImportedBySection({
 }: ImportedBySectionProps) {
   // Cross-highlight state driven by both sections' hover events
   const [inclusionHoverPath, setInclusionHoverPath] = useState<string | null>(
-    null
+    null,
   );
   const [importedByHoverPath, setImportedByHoverPath] = useState<string | null>(
-    null
+    null,
   );
 
   useEffect(() => {
@@ -46,21 +46,21 @@ export function ImportedBySection({
 
     window.addEventListener(
       "inclusion-path-hover",
-      inclusionHandler as EventListener
+      inclusionHandler as EventListener,
     );
     window.addEventListener(
       "imported-by-hover",
-      importedByHandler as EventListener
+      importedByHandler as EventListener,
     );
 
     return () => {
       window.removeEventListener(
         "inclusion-path-hover",
-        inclusionHandler as EventListener
+        inclusionHandler as EventListener,
       );
       window.removeEventListener(
         "imported-by-hover",
-        importedByHandler as EventListener
+        importedByHandler as EventListener,
       );
     };
   }, []);
@@ -91,13 +91,13 @@ export function ImportedBySection({
         chunkOutputFile?: string;
         chunkSize?: number;
         isDynamicImport: boolean;
-      }
+      },
     ) => {
       const moduleNorm = source.importer.replace(/^\.\/+/, "");
       const chunkContainingFile = chunks.find((chunk) =>
         chunk.includedInputs.some(
-          (p) => p === source.importer || p.includes(moduleNorm)
-        )
+          (p) => p === source.importer || p.includes(moduleNorm),
+        ),
       );
       const chunkOutputFile =
         chunkContainingFile?.outputFile ||
@@ -115,7 +115,7 @@ export function ImportedBySection({
         source: (typeof importSources)[number];
         chunkContainingFile?: InitialChunkSummary;
       }>;
-    }>
+    }>,
   );
 
   return (
@@ -145,8 +145,8 @@ export function ImportedBySection({
           return (
             <li key={gi} className="space-y-2">
               <div className="relative">
-                <div className="absolute -top-3.5 left-2 z-10">
-                  <div className="inline-flex items-center gap-2 px-1 py-1 rounded-md bg-background">
+                <div className="absolute -top-[12px] left-2 z-10">
+                  <div className="inline-flex items-center gap-1 px-[4px] border-muted rounded-md border bg-background">
                     {group.module !== "Unknown output" && (
                       <ChunkTypeIcon
                         variant="swatch"
@@ -193,7 +193,7 @@ export function ImportedBySection({
                   <div className="space-y-2">
                     {group.items.map(({ source, chunkContainingFile }, idx) => {
                       const fileExistsInMetafile = Boolean(
-                        metafile?.inputs[source.importer]
+                        metafile?.inputs[source.importer],
                       );
                       const canOpen = fileExistsInMetafile;
 
@@ -212,7 +212,7 @@ export function ImportedBySection({
                           className={`flex items-start gap-2 px-2 py-1 rounded-md border transition-colors cursor-pointer ${
                             isHighlighted
                               ? "bg-yellow-50 border-yellow-300"
-                              : "bg-card border-transparent hover:bg-accent/50"
+                              : "bg-muted/40 border-transparent hover:bg-accent/70"
                           }`}
                           onMouseEnter={() => {
                             const evt = new CustomEvent("imported-by-hover", {
@@ -247,7 +247,7 @@ export function ImportedBySection({
                             <div className="flex items-center gap-1">
                               <CornerDownRight size={12} />
                               {source.isDynamicImport ? (
-                                <span className="text-xs mr-1 text-muted-foreground">
+                                <span className="text-xs mr-1 text-nowrap text-muted-foreground">
                                   lazily imports
                                 </span>
                               ) : (
