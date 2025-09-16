@@ -5,15 +5,15 @@
  */
 
 /**
- * Converts a raw byte count into a human-readable string using decimal (base-1000) units.
+ * Converts a raw byte count into a human-readable string using binary (base-1024) units.
  *
- * The algorithm progressively divides the input value by 1000 until it finds the
- * most appropriate unit ( B , KB , MB or GB ). Decimal precision is kept low to
- * ensure stable display in UI components:
+ * The algorithm progressively divides the input value by 1024 until it finds the
+ * most appropriate unit ( B , KB , MB or GB ). This uses binary units which are
+ * standard in computing and developer tools.
  *
- * • Bytes ( B ) and Kilobytes ( KB ) are rounded to the nearest whole number
- * • Megabytes ( MB ) keep two decimal places for readability
- * • Gigabytes ( GB ) keep three decimal places for extra accuracy
+ * • Bytes ( B ) are rounded to the nearest whole number
+ * • Kilobytes ( KB ) and Megabytes ( MB ) keep one decimal place for readability
+ * • Gigabytes ( GB ) keep two decimal places for extra accuracy
  *
  * The function is intentionally small and synchronous so it can be used freely in
  * hot paths such as table renderers without introducing any measurable overhead.
@@ -21,14 +21,14 @@
  * @example
  * ```ts
  * formatBytes(0);           // "0 B"
- * formatBytes(999);         // "999 B"
- * formatBytes(10_000);      // "10 KB"
- * formatBytes(10_000_000);  // "10.00 MB"
+ * formatBytes(1023);        // "1023 B"
+ * formatBytes(10 * 1024);   // "10.0 KB"
+ * formatBytes(10 * 1024 * 1024);  // "10.0 MB"
  * ```
  *
  * @param bytes – Raw byte count, must be non-negative. Values outside the safe
  *        integer range are clamped by JavaScript’s numeric limits.
- * @returns Human-friendly string representation such as "1.234 MB".
+ * @returns Human-friendly string representation such as "1.2 MB".
  */
 export function formatBytes(bytes: number): string {
   if (!bytes) return "0 B";
@@ -39,14 +39,13 @@ export function formatBytes(bytes: number): string {
 
   // Climb the unit ladder while we still have a bigger unit available
   // and the current value is large enough to justify the switch.
-  while (value >= 1000 && unitIndex < units.length - 1) {
-    value /= 1000;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
     unitIndex++;
   }
 
-  // Use no decimals for the two smallest units to avoid noisy UIs.
-  // Use 2 decimals for MB and 3 decimals for GB
-  const decimals = unitIndex < 2 ? 0 : unitIndex === 2 ? 2 : 3;
+  // Use no decimals for bytes, 1 decimal for KB and MB, 2 decimals for GB
+  const decimals = unitIndex === 0 ? 0 : unitIndex < 3 ? 1 : 2;
   return `${value.toFixed(decimals)} ${units[unitIndex]}`;
 }
 

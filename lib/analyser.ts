@@ -23,16 +23,15 @@ export interface InclusionPathStep {
  * Determines whether a given output filename represents a browser-runnable
  * JavaScript bundle produced by esbuild.
  *
- * The analyser intentionally ignores `.mjs` outputs because those are usually
- * consumed by Node / SSR, whereas we only care about artefacts that a browser
- * actually downloads ( `.js` and `.cjs` ).
+ * The analyser includes `.mjs`, `.js`, and `.cjs` outputs as these represent
+ * JavaScript bundles that browsers can execute.
  *
  * @param file – Output filename as it appears in the metafile (relative path).
- * @returns `true` if the file ends with `.js` or `.cjs` (case-insensitive) and
+ * @returns `true` if the file ends with `.mjs`, `.js`, or `.cjs` (case-insensitive) and
  *          therefore should be included in browser bundle calculations.
  */
 export function isJsOutput(file: string): boolean {
-  return /\.(?:js|cjs)(\?.*)?$/i.test(file);
+  return /\.(?:mjs|js|cjs)(\?.*)?$/i.test(file);
 }
 
 /**

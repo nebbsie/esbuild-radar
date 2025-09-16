@@ -1,6 +1,7 @@
 "use client";
 
-import type { PathTreeNode } from "@/lib/path-tree";
+import { formatBytes } from "@/lib/format";
+import type { InitialChunkSummary, PathTreeNode } from "@/lib/types";
 import * as React from "react";
 import type { SunburstMethods } from "react-sunburst-chart";
 const ReactSunburst = React.lazy(() => import("react-sunburst-chart"));
@@ -131,6 +132,12 @@ function hashInt(input: string): number {
   return h >>> 0;
 }
 
+function isNodeModulesPath(path: string, name: string): boolean {
+  return (
+    /(^|\/)node_modules(\/)?.*/i.test(path) || /node_modules/i.test(name || "")
+  );
+}
+
 function hueDeltaForKey(
   key: string,
   depth: number,
@@ -150,9 +157,35 @@ function hueDeltaForKey(
 function shadeFrom(
   baseColor: string,
   level: number,
-  siblingIndex: number
+  siblingIndex: number,
+  isNodeModules = false
 ): string {
-  // Gentle, depth-friendly shading: keep hue constant per branch, lighten with depth
+  // For node_modules: keep red hue but lighten progressively and gradually
+  if (isNodeModules) {
+    const { r, g, b } = hexToRgb(baseColor);
+    const base = rgbToHsl(r, g, b);
+
+    // Keep red hue (0° or 360° in HSL)
+    const h = 0; // Red hue
+
+    // Logarithmic depth factor for gradual changes - much more gradual than source code
+    const frac = Math.min(1, Math.log2((level || 1) + 1) / 12); // Slower progression
+
+    // Slight desaturation with depth for de-emphasis
+    const s = clamp01(base.s * (1 - 0.08 * frac));
+
+    // Very gradual lighten with depth - logarithmic approach for many levels
+    const delta = 0.015 + 0.025 * frac; // Much smaller increments
+    let l = base.l + delta;
+
+    // Clamp to safe visible range - allow more range since we're being gradual
+    l = clamp01(Math.max(0.25, Math.min(0.9, l)));
+
+    const rgb2 = hslToRgb(h, s, l);
+    return rgbToHex(rgb2.r, rgb2.g, rgb2.b);
+  }
+
+  // For regular source code: use the original gentle shading
   const { r, g, b } = hexToRgb(baseColor);
   const base = rgbToHsl(r, g, b);
 
@@ -206,7 +239,6 @@ export function Sunburst({
     height: 0,
   });
   const [isClient, setIsClient] = React.useState(false);
-  const [lastFocusedDir, setLastFocusedDir] = React.useState<unknown>(null);
 
   // Mark as client-side
   React.useEffect(() => {
@@ -258,12 +290,91 @@ export function Sunburst({
   type SunburstData = {
     name: string;
     value: number;
+    originalSize: number; // Store original size for tooltips
     path: string;
     type: "dir" | "file";
     color?: string;
     isSelected?: boolean;
     children?: SunburstData[];
   };
+
+  // Apply logarithmic scaling to make small values more visible in sunburst
+  const scaleValueForSunburst = React.useCallback((size: number): number => {
+    if (!size || size <= 0 || !isFinite(size)) return 0;
+
+    try {
+      // Use log scaling: log(size + 1) compresses the range while preserving relative proportions
+      // Add 1 to avoid log(0) and ensure small values > 0
+      // Multiply by a factor to maintain reasonable visual proportions
+      const scaled = Math.log(size + 1) * 100;
+
+      // Ensure we never return NaN, Infinity, or negative values
+      if (!isFinite(scaled) || scaled < 0) return 0;
+
+      return scaled;
+    } catch (error) {
+      // Fallback to 0 if any calculation fails
+      console.warn("Error scaling sunburst value:", size, error);
+      return 0;
+    }
+  }, []);
+
+  // Find the parent directory of a file in the sunburst data tree
+  const findParentDirectory = React.useCallback(
+    (
+      data: SunburstData,
+      filePath: string,
+      currentPath: string[] = []
+    ): SunburstData | null => {
+      // Normalize the search path
+      const normalizedFilePath = filePath.replace(/^\.\//, "");
+
+      // Check if this node has the file as a direct child
+      if (data.children) {
+        for (const child of data.children) {
+          if (child.type === "file") {
+            // Try multiple path matching strategies
+            const childPath = child.path || "";
+            const normalizedChildPath = childPath.replace(/^\.\//, "");
+
+            // Exact match
+            if (
+              childPath === filePath ||
+              normalizedChildPath === normalizedFilePath
+            ) {
+              return data;
+            }
+
+            // Check if the file path ends with the child path (handles relative paths)
+            if (
+              normalizedFilePath.endsWith(normalizedChildPath) ||
+              filePath.endsWith(childPath)
+            ) {
+              return data;
+            }
+
+            // Check if the child path ends with the file path
+            if (
+              normalizedChildPath.endsWith(normalizedFilePath) ||
+              childPath.endsWith(filePath)
+            ) {
+              return data;
+            }
+          }
+          // Recursively search in child directories
+          if (child.type === "dir") {
+            const found = findParentDirectory(child, filePath, [
+              ...currentPath,
+              child.name,
+            ]);
+            if (found) return found;
+          }
+        }
+      }
+      return null;
+    },
+    []
+  );
 
   const convertToChartData = React.useCallback(
     (
@@ -276,9 +387,7 @@ export function Sunburst({
       if (depth === 1) {
         const key = node.path || node.name || "root";
         // Force node_modules to start red for immediate recognition
-        const isNodeModules =
-          /(^|\/)node_modules(\/)?.*/i.test(key) ||
-          /node_modules/i.test(node.name || "");
+        const isNodeModules = isNodeModulesPath(node.path, node.name || "");
         const baseHex = isNodeModules ? "#ef4444" : baseScale(key);
         // Lighten base slightly so starting color is less dark
         const { r, g, b } = hexToRgb(baseHex);
@@ -287,7 +396,8 @@ export function Sunburst({
         const rgb = hslToRgb(hsl.h, hsl.s, l);
         ownColor = rgbToHex(rgb.r, rgb.g, rgb.b);
       } else if (depth > 1 && parentBase) {
-        ownColor = shadeFrom(parentBase, depth - 1, 0);
+        const isNodeModules = isNodeModulesPath(node.path, node.name || "");
+        ownColor = shadeFrom(parentBase, depth - 1, 0, isNodeModules);
       } else if (depth === 0) {
         // Root color: neutral light so it isn't black/grey
         ownColor = "#e5e7eb"; // tailwind slate-200
@@ -326,14 +436,16 @@ export function Sunburst({
           depth >= 1 &&
           !childData.isSelected
         ) {
-          childData.color = shadeFrom(childBase, depth, idx);
+          const isNodeModules = isNodeModulesPath(child.path, child.name || "");
+          childData.color = shadeFrom(childBase, depth, idx, isNodeModules);
         }
         return childData;
       });
 
       return {
         name: node.name,
-        value: node.size,
+        value: scaleValueForSunburst(node.size), // Apply logarithmic scaling for better visibility
+        originalSize: node.size, // Store original size for tooltips
         path: node.path,
         type: node.type,
         color: ownColor,
@@ -341,8 +453,103 @@ export function Sunburst({
         children,
       };
     },
-    [baseScale]
+    [baseScale, scaleValueForSunburst]
   );
+
+  // Validate sunburst data before rendering
+  const sunburstData = React.useMemo(() => {
+    try {
+      return convertToChartData(tree, 0, undefined, selectedPath);
+    } catch (error) {
+      console.error("Error generating sunburst data:", error);
+      // Return a minimal valid data structure
+      return {
+        name: "root",
+        value: 1,
+        originalSize: 0,
+        path: "",
+        type: "dir" as const,
+        color: "#e5e7eb",
+        isSelected: false,
+        children: [],
+      };
+    }
+  }, [convertToChartData, tree, selectedPath]);
+
+  // Listen for module navigation events to automatically zoom to parent directory
+  React.useEffect(() => {
+    const handleModuleNavigation = (e: Event) => {
+      const ce = e as CustomEvent<{
+        module: string;
+        chunk?: InitialChunkSummary;
+      }>;
+      const { module: selectedModule } = ce.detail;
+
+      // Find and focus on the parent directory using the existing sunburst data
+      // This avoids regenerating the data structure which can cause d3.js layout errors
+      const parentDir = findParentDirectory(sunburstData, selectedModule);
+
+      if (parentDir && parentDir.type === "dir") {
+        try {
+          chartRef.current?.focusOnNode?.(parentDir as never);
+        } catch (error) {
+          console.warn("Failed to focus on parent directory:", error);
+        }
+      } else {
+        // If navigation fails, try to find the file directly and focus on its immediate parent
+        const findFileAndParent = (
+          data: SunburstData,
+          targetPath: string
+        ): SunburstData | null => {
+          if (data.children) {
+            for (const child of data.children) {
+              if (child.type === "file") {
+                const childPath = child.path || "";
+                const normalizedChildPath = childPath.replace(/^\.\//, "");
+                const normalizedTargetPath = targetPath.replace(/^\.\//, "");
+
+                if (
+                  childPath === targetPath ||
+                  normalizedChildPath === normalizedTargetPath ||
+                  normalizedTargetPath.endsWith(normalizedChildPath) ||
+                  targetPath.endsWith(childPath)
+                ) {
+                  return data; // Return the parent
+                }
+              }
+              if (child.type === "dir") {
+                const found = findFileAndParent(child, targetPath);
+                if (found) return found;
+              }
+            }
+          }
+          return null;
+        };
+
+        const directParent = findFileAndParent(sunburstData, selectedModule);
+        if (directParent) {
+          try {
+            chartRef.current?.focusOnNode?.(directParent as never);
+            return;
+          } catch (error) {
+            console.warn("Failed to focus on direct parent:", error);
+          }
+        }
+      }
+    };
+
+    window.addEventListener(
+      "navigate-to-module",
+      handleModuleNavigation as EventListener
+    );
+
+    return () => {
+      window.removeEventListener(
+        "navigate-to-module",
+        handleModuleNavigation as EventListener
+      );
+    };
+  }, [sunburstData, findParentDirectory]);
 
   // No imperative lifecycle needed when using react-sunburst-chart
 
@@ -367,66 +574,75 @@ export function Sunburst({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        overflow: "hidden", // Prevent chart from expanding beyond container bounds
       }}
     >
       <React.Suspense fallback={null}>
-        <ReactSunburst
-          ref={chartRef}
-          data={convertToChartData(tree, 0, undefined, selectedPath)}
-          width={Math.ceil(Math.min(width, height) * 1.25)}
-          height={Math.ceil(Math.min(width, height) * 1.25)}
-          excludeRoot={true}
-          centerRadius={0.1}
-          showLabels={true}
-          strokeColor="var(--background)"
-          transitionDuration={50}
-          color="color"
-          tooltipTitle={() => ""}
-          tooltipContent={(d: unknown) => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const node: any = d;
-            const name = node?.data?.name ?? node?.name ?? "";
-            const fullPath = node?.data?.path ?? node?.path ?? "";
-            const size = formatBytes(
-              (node?.value as number | undefined) ??
-                (node?.data?.size as number | undefined) ??
-                0
-            );
-            return `<div class=\"sunburst-tooltip\"><div><strong>${name}</strong></div><div>${fullPath}</div><div>${size}</div></div>`;
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            maxWidth: Math.min(width, height),
+            maxHeight: Math.min(width, height),
+            overflow: "hidden",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
-          onClick={(node: unknown) => {
-            const n = node as SunburstData | null;
-            if (!n) return;
+        >
+          <ReactSunburst
+            ref={chartRef}
+            data={sunburstData}
+            width={Math.min(width, height)}
+            height={Math.min(width, height)}
+            excludeRoot={true}
+            centerRadius={0.1}
+            showLabels={true}
+            strokeColor="var(--background)"
+            transitionDuration={50}
+            color="color"
+            tooltipTitle={() => ""}
+            tooltipContent={(d: unknown) => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const node: any = d;
+              const name = node?.data?.name ?? node?.name ?? "";
+              const fullPath = node?.data?.path ?? node?.path ?? "";
+              const size = formatBytes(
+                (node?.data?.originalSize as number | undefined) ??
+                  (node?.originalSize as number | undefined) ??
+                  0
+              );
+              return `<div class=\"sunburst-tooltip\"><div><strong>${name}</strong></div><div>${fullPath}</div><div>${size}</div></div>`;
+            }}
+            onClick={(node: unknown) => {
+              const n = node as SunburstData | null;
+              if (!n) return;
 
-            if (n.type === "file") {
-              // Select file only, prevent zoom/focus
-              onSelectFile(n.path as string);
-              // If library focused the file, immediately restore last focused directory
-              if (lastFocusedDir) {
-                setTimeout(() => {
+              if (n.type === "file") {
+                // Select the file
+                onSelectFile(n.path as string);
+
+                // Find and focus on the parent directory to make the file more visible
+                const parentDir = findParentDirectory(
+                  sunburstData,
+                  n.path as string
+                );
+
+                if (parentDir && parentDir.type === "dir") {
                   try {
-                    chartRef.current?.focusOnNode?.(lastFocusedDir as never);
+                    chartRef.current?.focusOnNode?.(parentDir as never);
                   } catch {}
-                }, 0);
+                }
+                return;
               }
-              return;
-            }
-            // Focus directories
-            try {
-              chartRef.current?.focusOnNode?.(n as never);
-              setLastFocusedDir(n);
-            } catch {}
-          }}
-        />
+              // Focus directories
+              try {
+                chartRef.current?.focusOnNode?.(n as never);
+              } catch {}
+            }}
+          />
+        </div>
       </React.Suspense>
     </div>
   );
-}
-
-function formatBytes(bytes: number): string {
-  if (!bytes || bytes <= 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  const value = bytes / Math.pow(1024, i);
-  return `${value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)} ${units[i]}`;
 }

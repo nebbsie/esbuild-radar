@@ -386,4 +386,91 @@ describe("filterChunks", () => {
       expect(isMainEntryPoint("src/index.ts", initialChunk)).toBe(false);
     });
   });
+
+  describe("file size calculation logic", () => {
+    it("should only show files with bytesInOutput > 0", () => {
+      // Simulate the logic from files-panel.tsx for filtering and sizing files within chunks
+      const inputsMap = {
+        "src/index.ts": { bytesInOutput: 100 },
+        "src/utils.ts": { bytesInOutput: 50 },
+        "src/empty.ts": { bytesInOutput: 0 },
+        "src/missing.ts": { bytes: 25 }, // No bytesInOutput
+      };
+
+      const includedInputs = [
+        "src/index.ts",
+        "src/utils.ts",
+        "src/empty.ts",
+        "src/missing.ts",
+      ];
+
+      // Apply the filtering logic from files-panel.tsx
+      const files = includedInputs
+        .map((p) => {
+          const bytesInOutput = inputsMap[p]?.bytesInOutput;
+          const size =
+            typeof bytesInOutput === "number" && bytesInOutput > 0
+              ? bytesInOutput
+              : 0;
+          return {
+            path: p,
+            size,
+          };
+        })
+        .filter((f) => f.size > 0);
+
+      expect(files).toHaveLength(2);
+      expect(files).toEqual([
+        { path: "src/index.ts", size: 100 },
+        { path: "src/utils.ts", size: 50 },
+      ]);
+
+      // Files with bytesInOutput = 0 or missing should be filtered out
+      expect(files.some((f) => f.path === "src/empty.ts")).toBe(false);
+      expect(files.some((f) => f.path === "src/missing.ts")).toBe(false);
+    });
+
+    it("should use only bytesInOutput for file sizes, not bytes fallback", () => {
+      const inputsMap = {
+        "src/file1.ts": { bytesInOutput: 100, bytes: 200 }, // Should use bytesInOutput
+        "src/file2.ts": { bytes: 50 }, // No bytesInOutput, should be 0
+      };
+
+      const includedInputs = ["src/file1.ts", "src/file2.ts"];
+
+      const files = includedInputs
+        .map((p) => {
+          const bytesInOutput = inputsMap[p]?.bytesInOutput;
+          const size =
+            typeof bytesInOutput === "number" && bytesInOutput > 0
+              ? bytesInOutput
+              : 0;
+          return {
+            path: p,
+            size,
+          };
+        })
+        .filter((f) => f.size > 0);
+
+      expect(files).toHaveLength(1);
+      expect(files[0]).toEqual({ path: "src/file1.ts", size: 100 });
+      // Should not fall back to bytes field
+      expect(files[0].size).not.toBe(200);
+    });
+
+    it("should calculate correct chunk sizes from real metafile data", () => {
+      const metafile = getStatsMetafile();
+      const chunks = createChunkSummaries(
+        Object.keys(metafile.outputs),
+        metafile
+      );
+
+      // Find chunk-MOPUCGUH.js
+      const mopuChunk = chunks.find(
+        (chunk) => chunk.outputFile === "chunk-MOPUCGUH.js"
+      );
+      expect(mopuChunk).toBeDefined();
+      expect(mopuChunk!.bytes).toBe(867777); // 847.4 KB
+    });
+  });
 });

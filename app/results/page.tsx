@@ -41,7 +41,6 @@ import * as React from "react";
 // LocalStorage keys
 const STORAGE_KEYS = {
   NODE_MODULES: "esbuild-analyser-show-node-modules",
-  FULL_PATHS: "esbuild-analyser-show-full-paths",
   ALL_COLLAPSED: "esbuild-analyser-all-collapsed",
   CHUNK_FILTERS: "esbuild-analyser-chunk-filters",
   PANEL_LAYOUT_3: "esbuild-analyser-panel-layout-3",
@@ -93,10 +92,6 @@ export default function ResultsPage() {
   // Load persisted settings
   const [showNodeModules, setShowNodeModules] = usePersistentState<boolean>(
     STORAGE_KEYS.NODE_MODULES,
-    false
-  );
-  const [showFullPaths, setShowFullPaths] = usePersistentState<boolean>(
-    STORAGE_KEYS.FULL_PATHS,
     false
   );
   const [allCollapsed, setAllCollapsed] = usePersistentState<boolean>(
@@ -854,13 +849,12 @@ export default function ResultsPage() {
                   selectedChunk={selectedChunk}
                   showNodeModules={showNodeModules}
                   setShowNodeModules={setShowNodeModules}
-                  showFullPaths={showFullPaths}
-                  setShowFullPaths={setShowFullPaths}
                   allCollapsed={allCollapsed}
                   setAllCollapsed={setAllCollapsed}
                   onSelectModule={onSelectModule}
                   selectedModule={selectedModule}
                   chunkSearch={chunkSearch}
+                  filteredChunks={filteredChunks}
                   onCloseChunk={() => {
                     setSelectedChunk(null);
                     setSelectedModule(null);

@@ -13,16 +13,7 @@ import {
 import { formatBytes } from "@/lib/format";
 import { buildPathTree } from "@/lib/path-tree";
 import type { InitialChunkSummary, Metafile } from "@/lib/types";
-import {
-  Eye,
-  EyeOff,
-  File,
-  FileText,
-  List,
-  Minimize2,
-  PieChart,
-  X,
-} from "lucide-react";
+import { Eye, EyeOff, List, Minimize2, PieChart, X } from "lucide-react";
 import * as React from "react";
 
 interface FilesPanelProps {
@@ -30,13 +21,12 @@ interface FilesPanelProps {
   selectedChunk: InitialChunkSummary | null;
   showNodeModules: boolean;
   setShowNodeModules: (value: boolean) => void;
-  showFullPaths: boolean;
-  setShowFullPaths: (value: boolean) => void;
   allCollapsed: boolean;
   setAllCollapsed: (value: boolean) => void;
   onSelectModule: (mod: string) => void;
   selectedModule: string | null;
   chunkSearch: string;
+  filteredChunks: InitialChunkSummary[];
   onCloseChunk?: () => void;
 }
 
@@ -45,13 +35,12 @@ export function FilesPanel({
   selectedChunk,
   showNodeModules,
   setShowNodeModules,
-  showFullPaths,
-  setShowFullPaths,
   allCollapsed,
   setAllCollapsed,
   onSelectModule,
   selectedModule,
   chunkSearch,
+  filteredChunks,
   onCloseChunk,
 }: FilesPanelProps) {
   const [viewMode, setViewMode] = React.useState<"tree" | "sunburst">(
@@ -153,31 +142,6 @@ export function FilesPanel({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setShowFullPaths(!showFullPaths)}
-                    className="h-8 w-8 p-0 cursor-pointer"
-                  >
-                    {showFullPaths ? (
-                      <FileText className="h-4 w-4" />
-                    ) : (
-                      <File className="h-4 w-4" />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>
-                    {showFullPaths
-                      ? "Show simplified folder names"
-                      : "Show complete file paths"}
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
                     onClick={() => setAllCollapsed(!allCollapsed)}
                     className="h-8 w-8 p-0 cursor-pointer"
                   >
@@ -211,33 +175,56 @@ export function FilesPanel({
                   files = (selectedChunk.includedInputs || [])
                     .filter((p) => showNodeModules || !/node_modules/.test(p))
                     .map((p) => {
+                      const bytesInOutput = inputsMap[p]?.bytesInOutput;
                       const size =
-                        (inputsMap[p]?.bytesInOutput as number | undefined) ||
-                        (inputsMap[p]?.bytes as number | undefined) ||
-                        0;
+                        typeof bytesInOutput === "number" && bytesInOutput > 0
+                          ? bytesInOutput
+                          : 0;
                       return {
                         path: p,
                         size,
                       };
-                    });
+                    })
+                    .filter((f) => f.size > 0); // Only show files that contribute bytes to the chunk
                 } else {
                   // Show all files from the metafile when no chunk is selected
+                  // Calculate total bundled size for each file across filtered chunks only
+                  const fileBundledSizes: Record<string, number> = {};
+
+                  if (metafile && filteredChunks.length > 0) {
+                    // Only sum up bytesInOutput for files in the currently filtered chunks
+                    filteredChunks.forEach((chunk) => {
+                      const output = metafile.outputs[chunk.outputFile];
+                      if (output?.inputs) {
+                        Object.entries(output.inputs).forEach(
+                          ([filePath, inputMeta]) => {
+                            const bundledSize = inputMeta.bytesInOutput || 0;
+                            if (bundledSize > 0) {
+                              fileBundledSizes[filePath] =
+                                (fileBundledSizes[filePath] || 0) + bundledSize;
+                            }
+                          }
+                        );
+                      }
+                    });
+                  }
+
                   files = metafile
-                    ? Object.entries(metafile.inputs)
+                    ? Object.keys(fileBundledSizes)
                         .filter(
-                          ([path]) =>
+                          (path) =>
                             showNodeModules || !/node_modules/.test(path)
                         )
-                        .map(([path, input]) => ({
+                        .map((path) => ({
                           path,
-                          size: input.bytes || 0,
+                          size: fileBundledSizes[path] || 0,
                         }))
                     : [];
                 }
-                const tree = buildPathTree(files, showFullPaths);
+                const tree = buildPathTree(files, true);
 
                 // Check if no files are visible due to node_modules filtering
-                if (files.length === 0 && !showNodeModules && selectedChunk) {
+                if (files.length === 0 && !showNodeModules) {
                   return (
                     <div className="text-center py-8">
                       <div className="text-sm text-muted-foreground">
