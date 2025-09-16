@@ -3,7 +3,7 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { metafileStorage } from "@/lib/storage";
 import type { MetafileData } from "@/lib/types";
-import { Plus, X } from "lucide-react";
+import { GitCompare, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 
@@ -64,7 +64,7 @@ export function BundleTopBar({
 
   const handleDeleteBundle = async (
     bundleId: string,
-    event: React.MouseEvent,
+    event: React.MouseEvent
   ) => {
     event.stopPropagation(); // Prevent triggering bundle selection
 
@@ -84,6 +84,10 @@ export function BundleTopBar({
 
   const handleAddBundle = () => {
     router.push("/upload");
+  };
+
+  const handleCompareBundles = () => {
+    router.push("/compare");
   };
 
   const formatBundleName = (name?: string) => {
@@ -108,7 +112,7 @@ export function BundleTopBar({
         onBundleChange(nextId);
       });
     },
-    [bundles, currentBundleId, onBundleChange],
+    [bundles, currentBundleId, onBundleChange]
   );
 
   React.useEffect(() => {
@@ -139,7 +143,7 @@ export function BundleTopBar({
 
   return (
     <div className="mb-3">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2">
         <ScrollArea className="max-w-[calc(100vw-200px)]">
           <div className="flex items-center gap-2">
             {bundles.map((bundle) => (
@@ -180,6 +184,18 @@ export function BundleTopBar({
             )}
           </div>
         </ScrollArea>
+
+        {/* Compare button */}
+        {bundles.length >= 2 && (
+          <button
+            onClick={handleCompareBundles}
+            className="flex cursor-pointer items-center gap-2 px-3 py-1 text-sm rounded-md border bg-background text-foreground border-border hover:bg-muted transition-colors"
+            title="Compare bundles"
+          >
+            <GitCompare className="h-4 w-4" />
+            <span>Compare</span>
+          </button>
+        )}
       </div>
     </div>
   );

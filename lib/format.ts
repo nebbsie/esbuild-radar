@@ -44,8 +44,8 @@ export function formatBytes(bytes: number): string {
     unitIndex++;
   }
 
-  // Use no decimals for bytes, 1 decimal for KB and MB, 2 decimals for GB
-  const decimals = unitIndex === 0 ? 0 : unitIndex < 3 ? 1 : 2;
+  // Use no decimals for bytes, 2 decimals for KB, MB, and GB
+  const decimals = unitIndex === 0 ? 0 : 2;
   return `${value.toFixed(decimals)} ${units[unitIndex]}`;
 }
 

@@ -43,9 +43,7 @@ export function FilesPanel({
   filteredChunks,
   onCloseChunk,
 }: FilesPanelProps) {
-  const [viewMode, setViewMode] = React.useState<"tree" | "sunburst">(
-    "sunburst"
-  );
+  const [viewMode, setViewMode] = React.useState<"tree" | "sunburst">("tree");
   return (
     <Card className="h-full gap-0">
       <CardHeader className="pb-0">
@@ -165,7 +163,7 @@ export function FilesPanel({
           <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="space-y-2" data-chunk-contents>
               {(() => {
-                let files: Array<{ path: string; size: number }>;
+                let files: Array<{ path: string; size: number }> = [];
 
                 if (selectedChunk) {
                   // Show files from the selected chunk
@@ -180,19 +178,12 @@ export function FilesPanel({
                         typeof bytesInOutput === "number" && bytesInOutput > 0
                           ? bytesInOutput
                           : 0;
-                      return {
-                        path: p,
-                        size,
-                      };
+                      return { path: p, size };
                     })
-                    .filter((f) => f.size > 0); // Only show files that contribute bytes to the chunk
+                    .filter((f) => f.size > 0);
                 } else {
-                  // Show all files from the metafile when no chunk is selected
-                  // Calculate total bundled size for each file across filtered chunks only
                   const fileBundledSizes: Record<string, number> = {};
-
                   if (metafile && filteredChunks.length > 0) {
-                    // Only sum up bytesInOutput for files in the currently filtered chunks
                     filteredChunks.forEach((chunk) => {
                       const output = metafile.outputs[chunk.outputFile];
                       if (output?.inputs) {
@@ -221,28 +212,19 @@ export function FilesPanel({
                         }))
                     : [];
                 }
+
                 const tree = buildPathTree(files, true);
 
-                // Check if no files are visible due to node_modules filtering
-                if (files.length === 0 && !showNodeModules) {
+                // Error / empty handling outside memo
+                if (tree.children?.length === 0) {
                   return (
                     <div className="text-center py-8">
                       <div className="text-sm text-muted-foreground">
-                        Third-party libraries are hidden. Click the eye icon
-                        above to show them.
-                      </div>
-                    </div>
-                  );
-                }
-
-                // Show message when no files are available
-                if (files.length === 0) {
-                  return (
-                    <div className="text-center py-8">
-                      <div className="text-sm text-muted-foreground">
-                        {selectedChunk
-                          ? "No files found in this chunk."
-                          : "No files found in the metafile."}
+                        {showNodeModules
+                          ? selectedChunk
+                            ? "No files found in this chunk."
+                            : "No files found in the metafile."
+                          : "Third-party libraries are hidden. Click the eye icon above to show them."}
                       </div>
                     </div>
                   );

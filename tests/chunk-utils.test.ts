@@ -11,6 +11,17 @@ import { describe, expect, it } from "vitest";
 import { getStatsMetafile } from "./test-helpers";
 import type { ChunkTypeResult, MockChunk } from "./test-types";
 
+// Test-specific chunk type that satisfies InitialChunkSummary requirements
+type TestChunk = Partial<InitialChunkSummary> & {
+  outputFile: string;
+  bytes?: number;
+  gzipBytes?: number;
+  brotliBytes?: number;
+  entryPoint?: string;
+  isEntry?: boolean;
+  includedInputs?: string[];
+};
+
 const mockMetafile = {
   inputs: {
     "src/index.ts": {
@@ -126,68 +137,123 @@ describe("createChunkSummaries", () => {
 
 describe("getChunkLoadType", () => {
   it("should return 'initial' for chunks in initial outputs", () => {
-    const chunk: MockChunk = { outputFile: "dist/index.js" };
-    const result = getChunkLoadType(chunk as any, mockInitialSummary);
+    const chunk: TestChunk = {
+      outputFile: "dist/index.js",
+      bytes: 100,
+      gzipBytes: 50,
+      brotliBytes: 40,
+      entryPoint: "",
+      isEntry: false,
+      includedInputs: [],
+    };
+    const result = getChunkLoadType(
+      chunk as InitialChunkSummary,
+      mockInitialSummary
+    );
     expect(result).toBe("initial");
   });
 
   it("should return 'lazy' for chunks not in initial outputs", () => {
-    const chunk: MockChunk = { outputFile: "dist/utils.js" };
-    const result = getChunkLoadType(chunk as any, mockInitialSummary);
+    const chunk: TestChunk = {
+      outputFile: "dist/utils.js",
+      bytes: 50,
+      gzipBytes: 25,
+      brotliBytes: 20,
+      entryPoint: "",
+      isEntry: false,
+      includedInputs: [],
+    };
+    const result = getChunkLoadType(
+      chunk as InitialChunkSummary,
+      mockInitialSummary
+    );
     expect(result).toBe("lazy");
   });
 
   it("should return 'initial' when initialSummary is null", () => {
-    const chunk: MockChunk = { outputFile: "dist/index.js" };
-    const result = getChunkLoadType(chunk as any, null);
+    const chunk: TestChunk = {
+      outputFile: "dist/index.js",
+      bytes: 100,
+      gzipBytes: 50,
+      brotliBytes: 40,
+      entryPoint: "",
+      isEntry: false,
+      includedInputs: [],
+    };
+    const result = getChunkLoadType(chunk as InitialChunkSummary, null);
     expect(result).toBe("initial");
   });
 });
 
 describe("isEntryPointInChunk", () => {
   it("should return true when entry point is included in chunk inputs", () => {
-    const chunk: MockChunk = {
+    const chunk: TestChunk = {
+      outputFile: "dist/test.js",
+      bytes: 100,
+      gzipBytes: 50,
+      brotliBytes: 40,
       entryPoint: "src/index.ts",
+      isEntry: true,
       includedInputs: ["src/index.ts", "src/utils.ts"],
     };
-    const result = isEntryPointInChunk(chunk as any);
+    const result = isEntryPointInChunk(chunk as InitialChunkSummary);
     expect(result).toBe(true);
   });
 
   it("should return false when entry point is not in inputs", () => {
-    const chunk: MockChunk = {
+    const chunk: TestChunk = {
+      outputFile: "dist/test.js",
+      bytes: 100,
+      gzipBytes: 50,
+      brotliBytes: 40,
       entryPoint: "src/missing.ts",
+      isEntry: true,
       includedInputs: ["src/index.ts", "src/utils.ts"],
     };
-    const result = isEntryPointInChunk(chunk as any);
+    const result = isEntryPointInChunk(chunk as InitialChunkSummary);
     expect(result).toBe(false);
   });
 
   it("should return false when chunk has no entry point", () => {
-    const chunk: MockChunk = {
+    const chunk: TestChunk = {
+      outputFile: "dist/test.js",
+      bytes: 100,
+      gzipBytes: 50,
+      brotliBytes: 40,
       entryPoint: "",
+      isEntry: false,
       includedInputs: ["src/index.ts"],
     };
-    const result = isEntryPointInChunk(chunk as any);
+    const result = isEntryPointInChunk(chunk as InitialChunkSummary);
     expect(result).toBe(false);
   });
 });
 
 describe("filterChunks", () => {
-  const chunks: MockChunk[] = [
+  const chunks: TestChunk[] = [
     {
       outputFile: "dist/index.js",
+      bytes: 100,
+      gzipBytes: 50,
+      brotliBytes: 40,
+      entryPoint: "src/index.ts",
+      isEntry: true,
       includedInputs: ["src/index.ts"],
     },
     {
       outputFile: "dist/utils.js",
+      bytes: 50,
+      gzipBytes: 25,
+      brotliBytes: 20,
+      entryPoint: "src/utils.ts",
+      isEntry: true,
       includedInputs: ["src/utils.ts"],
     },
   ];
 
   it("should return all chunks when no filters applied", () => {
     const result = filterChunks(
-      chunks as any,
+      chunks as InitialChunkSummary[],
       "",
       { initial: true, lazy: true },
       mockInitialSummary
@@ -197,7 +263,7 @@ describe("filterChunks", () => {
 
   it("should filter by search term", () => {
     const result = filterChunks(
-      chunks as any,
+      chunks as InitialChunkSummary[],
       "index",
       { initial: true, lazy: true },
       mockInitialSummary
@@ -208,7 +274,7 @@ describe("filterChunks", () => {
 
   it("should filter by chunk type", () => {
     const result = filterChunks(
-      chunks as any,
+      chunks as InitialChunkSummary[],
       "",
       { initial: true, lazy: false },
       mockInitialSummary
@@ -219,7 +285,7 @@ describe("filterChunks", () => {
 
   it("should combine search and type filters", () => {
     const result = filterChunks(
-      chunks as any,
+      chunks as InitialChunkSummary[],
       "utils",
       { initial: true, lazy: false },
       mockInitialSummary
@@ -407,7 +473,12 @@ describe("filterChunks", () => {
       // Apply the filtering logic from files-panel.tsx
       const files = includedInputs
         .map((p) => {
-          const bytesInOutput = inputsMap[p]?.bytesInOutput;
+          const bytesInOutput = (
+            inputsMap as Record<
+              string,
+              { bytesInOutput?: number; bytes?: number }
+            >
+          )[p]?.bytesInOutput;
           const size =
             typeof bytesInOutput === "number" && bytesInOutput > 0
               ? bytesInOutput
@@ -440,7 +511,12 @@ describe("filterChunks", () => {
 
       const files = includedInputs
         .map((p) => {
-          const bytesInOutput = inputsMap[p]?.bytesInOutput;
+          const bytesInOutput = (
+            inputsMap as Record<
+              string,
+              { bytesInOutput?: number; bytes?: number }
+            >
+          )[p]?.bytesInOutput;
           const size =
             typeof bytesInOutput === "number" && bytesInOutput > 0
               ? bytesInOutput

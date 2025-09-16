@@ -582,8 +582,6 @@ export function Sunburst({
           style={{
             width: "100%",
             height: "100%",
-            maxWidth: Math.min(width, height),
-            maxHeight: Math.min(width, height),
             overflow: "hidden",
             display: "flex",
             alignItems: "center",
@@ -593,11 +591,12 @@ export function Sunburst({
           <ReactSunburst
             ref={chartRef}
             data={sunburstData}
-            width={Math.min(width, height)}
-            height={Math.min(width, height)}
+            width={width}
+            height={height}
             excludeRoot={true}
             centerRadius={0.1}
             showLabels={true}
+            maxLevels={3}
             strokeColor="var(--background)"
             transitionDuration={50}
             color="color"

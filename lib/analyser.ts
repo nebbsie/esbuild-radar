@@ -1,14 +1,11 @@
 // Bundle analysis helpers used by the UI. Keep UI rendering out of this file.
 
-import { estimateBrotliSize, estimateGzipSize } from "@/lib/format";
 import type {
-  ClassifiedChunks,
   ImportKind,
   InclusionPathResult,
   InclusionStep,
   InitialChunkSummary,
   Metafile,
-  OutputLoadClassification,
 } from "@/lib/types";
 
 // Local type definitions for analyser-specific interfaces
@@ -50,6 +47,7 @@ export function isLikelyServerOutput(file: string): boolean {
   if (/(^|\/)server(\/?|$)/.test(lower)) return true;
   if (/\.server\./.test(lower)) return true;
   if (/server\.(mjs|js)(\?.*)?$/i.test(lower)) return true;
+  if (/\.mjs(\?.*)?$/i.test(lower)) return true; // <--- new check
   return false;
 }
 
@@ -82,92 +80,6 @@ export function inferEntryForOutput(
       }
   }
   return undefined;
-}
-
-/**
- * Returns all JS browser outputs as summary objects (initial + lazy, unsorted).
- */
-export function computeAllOutputSummaries(
-  meta: Metafile
-): InitialChunkSummary[] {
-  const all: InitialChunkSummary[] = [];
-  for (const [file, out] of Object.entries(meta.outputs)) {
-    if (!isJsOutput(file) || isLikelyServerOutput(file)) continue;
-    const includedInputs = Object.keys(out.inputs || {});
-    all.push({
-      outputFile: file,
-      bytes: out.bytes || 0,
-      gzipBytes: estimateGzipSize(out.bytes || 0),
-      brotliBytes: estimateBrotliSize(out.bytes || 0),
-      entryPoint: out.entryPoint || inferEntryForOutput(meta, file) || "",
-      isEntry: Boolean(out.entryPoint),
-      includedInputs,
-    });
-  }
-  return all;
-}
-
-/**
- * Computes the set of outputs that are statically reachable from entry outputs
- * by traversing only non-dynamic (static) import edges across outputs.
- */
-export function computeInitialOutputsSet(meta: Metafile): Set<string> {
-  const entryOutputs = Object.entries(meta.outputs)
-    .filter(
-      ([f, o]) => o.entryPoint && isJsOutput(f) && !isLikelyServerOutput(f)
-    )
-    .map(([f]) => f);
-  const visited = new Set<string>(entryOutputs);
-  const queue = [...entryOutputs];
-  while (queue.length) {
-    const cur = queue.shift() as string;
-    const out = meta.outputs[cur];
-    if (!out) continue;
-    for (const imp of out.imports || []) {
-      if (imp.external || imp.kind === "dynamic-import") continue;
-      const next = imp.path;
-      if (!meta.outputs[next]) continue;
-      if (!isJsOutput(next) || isLikelyServerOutput(next)) continue;
-      if (!visited.has(next)) {
-        visited.add(next);
-        queue.push(next);
-      }
-    }
-  }
-  return visited;
-}
-
-/** Lists output files that dynamically import the target output. */
-export function listDynamicImportingOutputs(
-  meta: Metafile,
-  targetOutput: string
-): string[] {
-  const importers: string[] = [];
-  for (const [of, out] of Object.entries(meta.outputs)) {
-    for (const imp of out.imports || []) {
-      if (imp.kind === "dynamic-import" && imp.path === targetOutput)
-        importers.push(of);
-    }
-  }
-  return importers;
-}
-
-/**
- * Classifies an output as initial or lazy using computeInitialOutputsSet. Lazy if
- * not statically reachable from entries. Returns dynamic importers for context.
- */
-export function classifyOutputLoadType(
-  meta: Metafile,
-  outputFile: string
-): OutputLoadClassification {
-  const initial = computeInitialOutputsSet(meta);
-  if (!initial.has(outputFile)) {
-    return {
-      kind: "lazy",
-      importers: listDynamicImportingOutputs(meta, outputFile),
-    };
-  }
-  return { kind: "initial" };
 }
 
 /** Picks the most likely initial (entry) output using heuristics from test.ts */
@@ -250,100 +162,8 @@ export function pickInitialOutput(
   });
 
   scored.sort((a, b) => b.s - a.s || (a.k < b.k ? -1 : a.k > b.k ? 1 : 0));
+
   return scored[0]?.k;
-}
-
-/**
- * Traverses from the initial output to classify all reachable chunks as initial or lazy
- * based on how they are imported (entry-point = initial, import-statement = initial, dynamic-import = lazy).
- * Includes the initial chunk in the results.
- */
-export function classifyChunksFromInitial(
-  meta: Metafile,
-  initialOutput: string
-): ClassifiedChunks {
-  const initialChunks: InitialChunkSummary[] = [];
-  const lazy: InitialChunkSummary[] = [];
-  const visited = new Set<string>();
-  const queue: Array<{ output: string; importKind: string }> = [];
-
-  // Create the initial chunk summary
-  const initialOut = meta.outputs[initialOutput];
-  if (!initialOut)
-    return {
-      initial: undefined as InitialChunkSummary | undefined,
-      initialChunks,
-      lazy,
-    };
-
-  // Mark initial as visited so it can never be enqueued again and avoids duplicates
-  visited.add(initialOutput);
-
-  const initialChunk: InitialChunkSummary = {
-    outputFile: initialOutput,
-    bytes: initialOut.bytes || 0,
-    gzipBytes: estimateGzipSize(initialOut.bytes || 0),
-    brotliBytes: estimateBrotliSize(initialOut.bytes || 0),
-    entryPoint:
-      initialOut.entryPoint || inferEntryForOutput(meta, initialOutput) || "",
-    isEntry: Boolean(initialOut.entryPoint),
-    includedInputs: Object.keys(initialOut.inputs || {}),
-  };
-
-  // Add direct imports to queue
-  for (const imp of initialOut.imports || []) {
-    if (imp.external) continue;
-    if (!meta.outputs[imp.path]) continue;
-    if (!isJsOutput(imp.path) || isLikelyServerOutput(imp.path)) continue;
-    queue.push({ output: imp.path, importKind: imp.kind });
-  }
-
-  while (queue.length > 0) {
-    const { output, importKind } = queue.shift()!;
-    if (visited.has(output)) continue;
-    visited.add(output);
-
-    const out = meta.outputs[output];
-    if (!out) continue;
-
-    // Create chunk summary
-    const chunk: InitialChunkSummary = {
-      outputFile: output,
-      bytes: out.bytes || 0,
-      gzipBytes: estimateGzipSize(out.bytes || 0),
-      brotliBytes: estimateBrotliSize(out.bytes || 0),
-      entryPoint: out.entryPoint || inferEntryForOutput(meta, output) || "",
-      isEntry: Boolean(out.entryPoint),
-      includedInputs: Object.keys(out.inputs || {}),
-    };
-
-    // Skip if this output is the same as the initial chunk (extra guard)
-    if (output !== initialOutput) {
-      // Classify based on import kind
-      if (importKind === "dynamic-import") {
-        lazy.push(chunk);
-      } else {
-        initialChunks.push(chunk);
-      }
-    }
-
-    // Add this chunk's imports to queue (preserve the import kind that reached it)
-    for (const imp of out.imports || []) {
-      if (imp.external) continue;
-      if (!meta.outputs[imp.path]) continue;
-      if (!isJsOutput(imp.path) || isLikelyServerOutput(imp.path)) continue;
-      if (!visited.has(imp.path)) {
-        // Use the actual kind of this import edge, **not** the parent edge kind
-        queue.push({ output: imp.path, importKind: imp.kind });
-      }
-    }
-  }
-
-  // Sort by size (largest first)
-  initialChunks.sort((a, b) => b.bytes - a.bytes);
-  lazy.sort((a, b) => b.bytes - a.bytes);
-
-  return { initial: initialChunk, initialChunks, lazy };
 }
 
 // Compute an inclusion path from entry input to target input using the inputs graph.

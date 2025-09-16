@@ -9,23 +9,18 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import { inferEntryForOutput, pickInitialOutput } from "@/lib/analyser";
 import {
   createChunkSummaries,
   filterChunks,
   getChunkLoadType,
 } from "@/lib/chunk-utils";
 import { processUploadedFile as processUploadedFileUtil } from "@/lib/file-utils";
-import { estimateBrotliSize, estimateGzipSize } from "@/lib/format";
 import { usePersistentState } from "@/lib/hooks/use-persistent-state";
-import { summarizeInitial } from "@/lib/initial-summary";
+import { analyseStats } from "@/lib/stats-analyser";
+// summarizeInitial no longer needed – replaced by analyseStats
 import { parseMetafile } from "@/lib/metafile";
 import { determineModuleSelectionForChunkChange } from "@/lib/module-utils";
-import {
-  getInitialChunkEntryPoint,
-  ModuleNavigationHistory,
-  selectModule,
-} from "@/lib/navigation-utils";
+import { ModuleNavigationHistory, selectModule } from "@/lib/navigation-utils";
 import { metafileStorage } from "@/lib/storage";
 import type {
   InclusionPathResult,
@@ -115,8 +110,6 @@ export default function ResultsPage() {
   const [searchResultIndex, setSearchResultIndex] = React.useState(-1);
   const [showFilterMenu, setShowFilterMenu] = React.useState(false);
   const moduleHistory = React.useMemo(() => new ModuleNavigationHistory(), []);
-
-  // no-op: using setChunkTypeFilters directly with functional updates below
 
   // Navigation functions
 
@@ -257,97 +250,25 @@ export default function ResultsPage() {
     try {
       const json = JSON.parse(bundleData.data);
       setMetafileName(bundleData.name || "");
+
       const mf = parseMetafile(json);
 
-      // Pick the initial chunk
-      const pickedInitial = pickInitialOutput(mf);
-      if (!pickedInitial) {
-        console.warn("No initial chunk found");
-        return;
-      }
+      // Run the heavy analysis once
+      const analysis = analyseStats(mf);
 
-      // Get initial/lazy summary using the tested logic
-      const summary = summarizeInitial(mf, pickedInitial);
-      setInitialSummary(summary);
+      setMetafile(analysis.metafile);
+      setInitialSummary(analysis.initialSummary);
+      setChunks(analysis.chunks);
+      setInitialChunk(analysis.initialChunk);
+      setSelectedChunk(null); // no chunk selected initially
 
-      // Convert output filenames to InitialChunkSummary objects
-      const unsortedChunks: InitialChunkSummary[] = [
-        ...summary.initial.outputs,
-        ...summary.lazy.outputs,
-      ]
-        .map((outputFile) => {
-          const out = mf.outputs[outputFile];
-          if (!out) return null;
-          return {
-            outputFile,
-            bytes: out.bytes || 0,
-            gzipBytes: estimateGzipSize(out.bytes || 0),
-            brotliBytes: estimateBrotliSize(out.bytes || 0),
-            entryPoint:
-              out.entryPoint || inferEntryForOutput(mf, outputFile) || "",
-            isEntry: Boolean(out.entryPoint),
-            includedInputs: Object.keys(out.inputs || {}),
-          };
-        })
-        .filter((chunk): chunk is InitialChunkSummary => Boolean(chunk));
-
-      // Find the main entry chunk for sorting
-      const mainEntryPoint = getInitialChunkEntryPoint(mf, summary);
-      const mainEntryChunk = mainEntryPoint
-        ? unsortedChunks.find((c) => c.entryPoint === mainEntryPoint)
-        : null;
-
-      // Sort chunks: main entry chunk first, then by size
-      const allChunks = unsortedChunks.sort((a, b) => {
-        // If a is the main entry chunk, it comes first
-        if (mainEntryChunk && a.outputFile === mainEntryChunk.outputFile)
-          return -1;
-        // If b is the main entry chunk, a comes after
-        if (mainEntryChunk && b.outputFile === mainEntryChunk.outputFile)
-          return 1;
-
-        // Otherwise sort by size (largest first)
-        return b.bytes - a.bytes;
-      });
-
-      // Select the first chunk from the classified list, or the initial chunk if empty
-      let initialSelected = allChunks[0] || null;
-      if (!initialSelected && pickedInitial) {
-        const out = mf.outputs[pickedInitial];
-        initialSelected = {
-          outputFile: pickedInitial,
-          bytes: out.bytes || 0,
-          gzipBytes: estimateGzipSize(out.bytes || 0),
-          brotliBytes: estimateBrotliSize(out.bytes || 0),
-          entryPoint:
-            out.entryPoint || inferEntryForOutput(mf, pickedInitial) || "",
-          isEntry: Boolean(out.entryPoint),
-          includedInputs: Object.keys(out.inputs || {}),
-        };
-      }
-
-      setMetafile(mf);
-      setChunks(allChunks);
-      setSelectedChunk(null); // Don't select any chunk initially
-
-      // Set the initial chunk
-      const initialChunkEntry = getInitialChunkEntryPoint(mf, summary);
-      if (initialChunkEntry) {
-        const chunk = allChunks.find((c) => c.entryPoint === initialChunkEntry);
-        setInitialChunk(chunk || null);
-      } else {
-        setInitialChunk(null);
-      }
-
-      // Don't auto-select any module on load
+      // Reset module / inclusion state
       setSelectedModule(null);
       setInclusion(null);
 
-      // Mark initial load as complete
       setIsInitialLoad(false);
     } catch (err) {
       console.error("Failed to parse metafile:", err);
-      // Clear invalid data
       clearData();
       alert(
         "Invalid esbuild metafile JSON: " +

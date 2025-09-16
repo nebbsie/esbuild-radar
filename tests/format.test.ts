@@ -17,12 +17,12 @@ describe("formatBytes", () => {
     expect(formatBytes(512)).toBe("512 B");
   });
 
-  it("formats kilobytes with 1 decimal (base-1024)", () => {
-    expect(formatBytes(10 * 1024)).toBe("10.0 KB");
+  it("formats kilobytes with 2 decimals (base-1024)", () => {
+    expect(formatBytes(10 * 1024)).toBe("10.00 KB");
   });
 
-  it("formats megabytes with 1 decimal (base-1024)", () => {
-    expect(formatBytes(10 * 1024 * 1024)).toBe("10.0 MB");
+  it("formats megabytes with 2 decimals (base-1024)", () => {
+    expect(formatBytes(10 * 1024 * 1024)).toBe("10.00 MB");
   });
 
   it("formats gigabytes with 2 decimals (base-1024)", () => {
