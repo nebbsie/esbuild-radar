@@ -48,6 +48,11 @@ export default function ComparePage() {
     initialChunk: null,
   });
   const [isLoading, setIsLoading] = React.useState(true);
+  const [leftLoading, setLeftLoading] = React.useState(false);
+  const [rightLoading, setRightLoading] = React.useState(false);
+  const summaryScrollerRef = React.useRef<
+    null | ((outputFile: string) => void)
+  >(null);
 
   // Load all bundles on mount
   React.useEffect(() => {
@@ -92,13 +97,39 @@ export default function ComparePage() {
     }
   }, []);
 
+  React.useEffect(() => {
+    // If exactly two bundles exist, auto-select oldest on the left and newest on the right
+    if (bundles.length === 2 && !leftSide.metafile && !rightSide.metafile) {
+      (async () => {
+        setLeftLoading(true);
+        setRightLoading(true);
+        try {
+          const [left, right] = await Promise.all([
+            loadBundleData(bundles[0]),
+            loadBundleData(bundles[1]),
+          ]);
+          if (left) setLeftSide(left);
+          if (right) setRightSide(right);
+        } finally {
+          setLeftLoading(false);
+          setRightLoading(false);
+        }
+      })();
+    }
+  }, [bundles, leftSide.metafile, rightSide.metafile, loadBundleData]);
+
   const handleLeftSideSelection = React.useCallback(
     async (bundleId: string) => {
       const bundleData = bundles.find((b) => b.id === bundleId);
       if (bundleData) {
-        const data = await loadBundleData(bundleData);
-        if (data) {
-          setLeftSide(data);
+        setLeftLoading(true);
+        try {
+          const data = await loadBundleData(bundleData);
+          if (data) {
+            setLeftSide(data);
+          }
+        } finally {
+          setLeftLoading(false);
         }
       }
     },
@@ -109,9 +140,14 @@ export default function ComparePage() {
     async (bundleId: string) => {
       const bundleData = bundles.find((b) => b.id === bundleId);
       if (bundleData) {
-        const data = await loadBundleData(bundleData);
-        if (data) {
-          setRightSide(data);
+        setRightLoading(true);
+        try {
+          const data = await loadBundleData(bundleData);
+          if (data) {
+            setRightSide(data);
+          }
+        } finally {
+          setRightLoading(false);
         }
       }
     },
@@ -160,7 +196,15 @@ export default function ComparePage() {
         <div className="flex gap-4 h-full">
           {/* Left Side - 31% width */}
           <div className="w-[31%]">
-            <Card className="h-full gap-0">
+            <Card className="h-full gap-0 relative">
+              {leftLoading && (
+                <div className="absolute inset-0 z-10 bg-background/70 backdrop-blur-[1px] flex items-center justify-center">
+                  <div
+                    className="w-5 h-5 rounded-full border-2 border-muted-foreground/30 border-t-primary animate-spin"
+                    aria-label="Loading left bundle"
+                  />
+                </div>
+              )}
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Left Side</CardTitle>
                 <div className="space-y-2">
@@ -168,6 +212,7 @@ export default function ComparePage() {
                     value={leftSide.bundle?.id || ""}
                     onChange={(e) => handleLeftSideSelection(e.target.value)}
                     className="w-full px-3 py-2 text-sm border border-border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                    disabled={isLoading || leftLoading}
                   >
                     <option value="">Select a bundle...</option>
                     {bundles.map((bundle) => (
@@ -204,6 +249,9 @@ export default function ComparePage() {
                     setSelectedModule={() => {}}
                     setSelectedChunk={() => {}}
                     setInclusion={() => {}}
+                    onChunkClick={(c) =>
+                      summaryScrollerRef.current?.(c.outputFile)
+                    }
                   />
                 ) : (
                   <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -219,7 +267,15 @@ export default function ComparePage() {
 
           {/* Center Comparison Panel - 38% width */}
           <div className="w-[38%]">
-            <Card className="h-full gap-0">
+            <Card className="h-full gap-0 relative">
+              {(leftLoading || rightLoading) && (
+                <div className="absolute inset-0 z-10 bg-background/70 backdrop-blur-[1px] flex items-center justify-center">
+                  <div
+                    className="w-5 h-5 rounded-full border-2 border-muted-foreground/30 border-t-primary animate-spin"
+                    aria-label="Loading comparison"
+                  />
+                </div>
+              )}
               <CardHeader className="pb-0 mb-0">
                 <CardTitle className="text-base">Comparison</CardTitle>
               </CardHeader>
@@ -234,6 +290,9 @@ export default function ComparePage() {
                     rightLazyChunks={rightSide.lazyChunks}
                     leftMetafile={leftSide.metafile}
                     rightMetafile={rightSide.metafile}
+                    onRegisterScroller={(fn) =>
+                      (summaryScrollerRef.current = fn)
+                    }
                   />
                 ) : (
                   <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -255,7 +314,15 @@ export default function ComparePage() {
 
           {/* Right Side - 31% width */}
           <div className="w-[31%]">
-            <Card className="h-full gap-0">
+            <Card className="h-full gap-0 relative">
+              {rightLoading && (
+                <div className="absolute inset-0 z-10 bg-background/70 backdrop-blur-[1px] flex items-center justify-center">
+                  <div
+                    className="w-5 h-5 rounded-full border-2 border-muted-foreground/30 border-t-primary animate-spin"
+                    aria-label="Loading right bundle"
+                  />
+                </div>
+              )}
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">Right Side</CardTitle>
                 <div className="space-y-2">
@@ -263,6 +330,7 @@ export default function ComparePage() {
                     value={rightSide.bundle?.id || ""}
                     onChange={(e) => handleRightSideSelection(e.target.value)}
                     className="w-full px-3 py-2 text-sm border border-border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                    disabled={isLoading || rightLoading}
                   >
                     <option value="">Select a bundle...</option>
                     {bundles.map((bundle) => (
@@ -299,6 +367,9 @@ export default function ComparePage() {
                     setSelectedModule={() => {}}
                     setSelectedChunk={() => {}}
                     setInclusion={() => {}}
+                    onChunkClick={(c) =>
+                      summaryScrollerRef.current?.(c.outputFile)
+                    }
                   />
                 ) : (
                   <div className="flex items-center justify-center h-full text-muted-foreground">

@@ -11,6 +11,7 @@ import {
   scoreChange,
 } from "@/lib/score-utils";
 import type { InitialChunkSummary, Metafile } from "@/lib/types";
+import React from "react";
 
 interface ComparisonSummaryProps {
   leftChunks: InitialChunkSummary[];
@@ -21,6 +22,7 @@ interface ComparisonSummaryProps {
   rightLazyChunks: InitialChunkSummary[];
   leftMetafile?: Metafile;
   rightMetafile?: Metafile;
+  onRegisterScroller?: (fn: (outputFile: string) => void) => void;
 }
 
 interface SizeComparison {
@@ -90,6 +92,7 @@ export function ComparisonSummary({
   rightLazyChunks,
   leftMetafile,
   rightMetafile,
+  onRegisterScroller,
 }: ComparisonSummaryProps) {
   const initialComparison = calculateSizeComparison(
     leftInitialChunks,
@@ -110,8 +113,32 @@ export function ComparisonSummary({
     chunksRight: rightChunks.length,
   });
 
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+  const [sortMode, setSortMode] = React.useState<"increase" | "decrease">(
+    "decrease"
+  );
+
+  React.useEffect(() => {
+    if (!onRegisterScroller) return;
+    const scrollToChunk = (outputFile: string) => {
+      if (!containerRef.current) return;
+      const target = containerRef.current.querySelector(
+        `[data-chunk-id="${CSS.escape(outputFile)}"]`
+      ) as HTMLElement | null;
+      if (target) {
+        target.scrollIntoView({ behavior: "auto", block: "center" });
+        // Flash highlight
+        target.classList.add("flash-highlight");
+        window.setTimeout(() => {
+          target.classList.remove("flash-highlight");
+        }, 600);
+      }
+    };
+    onRegisterScroller(scrollToChunk);
+  }, [onRegisterScroller]);
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" ref={containerRef}>
       {/* Sticky Top Section */}
       <div className="sticky top-0 bg-background z-10 space-y-2 pb-3 border-b">
         {/* Compact Stats Grid */}
@@ -191,25 +218,90 @@ export function ComparisonSummary({
           </div>
         </div>
 
-        <div
-          className={`flex items-center gap-2 p-2 rounded-lg border ${getScoreColor(scoreResult.verdict)}`}
-        >
-          <div className="flex items-center gap-2">
-            {scoreResult.verdict === "positive" && (
-              <span className="text-green-600">✅</span>
-            )}
-            {scoreResult.verdict === "mixed" && (
-              <span className="text-orange-600">⚠️</span>
-            )}
-            {scoreResult.verdict === "negative" && (
-              <span className="text-red-600">❌</span>
-            )}
+        {/* Total Code Size + Score Row */}
+        <div className="grid grid-cols-2 gap-2">
+          {/* Total Code Size */}
+          <div
+            className={`p-2 rounded-lg border ${getComparisonBackground(
+              calculateSizeComparison(leftChunks, rightChunks).percentage,
+              false
+            )}`}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-muted-foreground">
+                Total Code Size
+              </span>
+              <span className="text-xs font-medium">
+                {leftChunks.length} → {rightChunks.length} chunks
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">
+                {formatBytes(leftChunks.reduce((s, c) => s + c.bytes, 0))} →{" "}
+                {formatBytes(rightChunks.reduce((s, c) => s + c.bytes, 0))}
+              </span>
+              <Badge
+                variant={getComparisonBadgeVariant(
+                  calculateSizeComparison(leftChunks, rightChunks).percentage,
+                  false
+                )}
+                className="text-xs px-1 py-0"
+              >
+                {calculateSizeComparison(leftChunks, rightChunks).difference > 0
+                  ? "+"
+                  : calculateSizeComparison(leftChunks, rightChunks)
+                        .difference < 0
+                    ? "-"
+                    : ""}
+                {formatBytes(
+                  Math.abs(
+                    calculateSizeComparison(leftChunks, rightChunks).difference
+                  )
+                )}
+              </Badge>
+            </div>
           </div>
-          <div className="text-right">
-            <div className="text-sm font-medium">
+
+          {/* Score pill */}
+          <div className="p-2 rounded-lg border bg-muted/40">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {scoreResult.verdict === "positive" && (
+                  <span className="text-green-600">✅</span>
+                )}
+                {scoreResult.verdict === "mixed" && (
+                  <span className="text-orange-600">⚠️</span>
+                )}
+                {scoreResult.verdict === "negative" && (
+                  <span className="text-red-600">❌</span>
+                )}
+                <span className="text-xs font-medium">Overall change</span>
+              </div>
+              <Badge
+                className={`text-xs px-1 py-0 ${getScoreColor(scoreResult.verdict)}`}
+              >
+                {scoreResult.verdict}
+              </Badge>
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
               {getScoreDescription(scoreResult)}
             </div>
           </div>
+        </div>
+
+        {/* Sort Controls */}
+        <div className="flex items-center justify-end gap-2">
+          <label className="text-xs text-muted-foreground">Order by:</label>
+          <select
+            value={sortMode}
+            onChange={(e) =>
+              setSortMode(e.target.value as "increase" | "decrease")
+            }
+            className="px-2 py-1 text-xs border border-border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+          >
+            <option value="increase">Most increased</option>
+            <option value="decrease">Most decreased</option>
+          </select>
         </div>
       </div>
 
@@ -225,6 +317,7 @@ export function ComparisonSummary({
             isLazyChunks={false}
             leftMetafile={leftMetafile}
             rightMetafile={rightMetafile}
+            sortMode={sortMode}
           />
         </div>
 
@@ -238,6 +331,7 @@ export function ComparisonSummary({
             isLazyChunks={true}
             leftMetafile={leftMetafile}
             rightMetafile={rightMetafile}
+            sortMode={sortMode}
           />
         </div>
       </div>

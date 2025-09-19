@@ -11,16 +11,20 @@ interface BundleTopBarProps {
   currentBundleId?: string;
   onBundleChange: (bundleId: string) => void;
   onBundleDeleted?: () => void;
+  isSwitchingBundle?: boolean;
 }
 
 export function BundleTopBar({
   currentBundleId,
   onBundleChange,
   onBundleDeleted,
+  isSwitchingBundle = false,
 }: BundleTopBarProps) {
   const router = useRouter();
   const [bundles, setBundles] = React.useState<MetafileData[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
+  const [pendingBundleId, setPendingBundleId] = React.useState<string | null>(
+    null
+  );
 
   // Load all bundles on mount
   React.useEffect(() => {
@@ -30,8 +34,6 @@ export function BundleTopBar({
         setBundles(allBundles);
       } catch (err) {
         console.error("Failed to load bundles:", err);
-      } finally {
-        setIsLoading(false);
       }
     };
 
@@ -53,7 +55,20 @@ export function BundleTopBar({
     }
   }, [currentBundleId]);
 
+  // Clear pending state when switch completes or current changes
+  React.useEffect(() => {
+    if (!isSwitchingBundle) {
+      setPendingBundleId(null);
+    }
+  }, [isSwitchingBundle]);
+  React.useEffect(() => {
+    setPendingBundleId(null);
+  }, [currentBundleId]);
+
   const handleBundleClick = async (bundleId: string) => {
+    if (isSwitchingBundle || bundleId === currentBundleId) return;
+    setPendingBundleId(bundleId);
+
     try {
       await metafileStorage.setCurrentBundle(bundleId);
       onBundleChange(bundleId);
@@ -99,7 +114,7 @@ export function BundleTopBar({
   // Keyboard navigation: Alt+ArrowLeft / Alt+ArrowRight to switch tabs
   const switchBundle = React.useCallback(
     (direction: "left" | "right") => {
-      if (!bundles.length || !currentBundleId) return;
+      if (!bundles.length || !currentBundleId || isSwitchingBundle) return;
       const index = bundles.findIndex((b) => b.id === currentBundleId);
       if (index === -1) return;
       const nextIndex =
@@ -108,11 +123,12 @@ export function BundleTopBar({
           : (index + 1) % bundles.length;
       const nextId = bundles[nextIndex]?.id;
       if (!nextId) return;
+      setPendingBundleId(nextId);
       void metafileStorage.setCurrentBundle(nextId).then(() => {
         onBundleChange(nextId);
       });
     },
-    [bundles, currentBundleId, onBundleChange]
+    [bundles, currentBundleId, onBundleChange, isSwitchingBundle]
   );
 
   React.useEffect(() => {
@@ -137,10 +153,6 @@ export function BundleTopBar({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [switchBundle]);
 
-  if (isLoading) {
-    return <div className="mb-3 min-h-[32px]"> </div>;
-  }
-
   return (
     <div className="mb-3">
       <div className="flex items-center justify-between gap-2">
@@ -150,15 +162,27 @@ export function BundleTopBar({
               <div key={bundle.id} className="group">
                 <div
                   onClick={() => handleBundleClick(bundle.id)}
-                  className={`relative flex items-center gap-2 px-3 py-1 pr-6 text-sm rounded-md border transition-colors cursor-pointer ${
+                  className={`relative flex items-center gap-2 px-3 py-1 pr-6 text-sm rounded-md border transition-colors ${
+                    isSwitchingBundle || bundle.id === currentBundleId
+                      ? "cursor-default"
+                      : "cursor-pointer"
+                  } ${
                     currentBundleId === bundle.id
                       ? "bg-primary/10 text-primary border-primary/50"
-                      : "bg-background text-foreground border-border hover:bg-muted"
+                      : isSwitchingBundle
+                        ? "bg-muted/50 text-muted-foreground border-border"
+                        : "bg-background text-foreground border-border hover:bg-muted"
                   }`}
                 >
                   <span className="truncate mr-2 max-w-32">
                     {formatBundleName(bundle.name)}
                   </span>
+                  {pendingBundleId === bundle.id && (
+                    <span
+                      className="inline-block w-3 h-3 rounded-full border-2 border-current/30 border-t-current animate-spin"
+                      aria-label="Switching"
+                    />
+                  )}
                   <button
                     onClick={(e) => handleDeleteBundle(bundle.id, e)}
                     className="cursor-pointer absolute right-1 top-1/2 -translate-y-1/2 opacity-60 hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted"

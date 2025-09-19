@@ -9,6 +9,7 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
+import { bundleCache } from "@/lib/bundle-cache";
 import {
   createChunkSummaries,
   filterChunks,
@@ -73,6 +74,7 @@ export default function ResultsPage() {
     null
   );
   const [isInitialLoad, setIsInitialLoad] = React.useState(true);
+  const [isSwitchingBundle, setIsSwitchingBundle] = React.useState(false);
 
   // Update page title when metafile name changes
   React.useEffect(() => {
@@ -245,28 +247,34 @@ export default function ResultsPage() {
     return createChunkSummaries(initialSummary.lazy.outputs, metafile);
   }, [initialSummary, metafile]);
 
-  // Load metafile data and process it
+  // Load metafile data and process it with caching
   const loadBundleData = React.useCallback(async (bundleData: MetafileData) => {
     try {
-      const json = JSON.parse(bundleData.data);
-      setMetafileName(bundleData.name || "");
+      // Check cache first
+      let analysis = bundleCache.get(bundleData.id);
 
-      const mf = parseMetafile(json);
+      if (!analysis) {
+        // Parse and analyze if not cached
+        const json = JSON.parse(bundleData.data);
+        const mf = parseMetafile(json);
+        analysis = analyseStats(mf);
 
-      // Run the heavy analysis once
-      const analysis = analyseStats(mf);
+        // Cache the result
+        bundleCache.set(bundleData.id, bundleData, analysis);
+      }
 
-      setMetafile(analysis.metafile);
-      setInitialSummary(analysis.initialSummary);
-      setChunks(analysis.chunks);
-      setInitialChunk(analysis.initialChunk);
-      setSelectedChunk(null); // no chunk selected initially
-
-      // Reset module / inclusion state
-      setSelectedModule(null);
-      setInclusion(null);
-
-      setIsInitialLoad(false);
+      // Batch all state updates together to minimize re-renders
+      React.startTransition(() => {
+        setMetafileName(bundleData.name || "");
+        setMetafile(analysis.metafile);
+        setInitialSummary(analysis.initialSummary);
+        setChunks(analysis.chunks);
+        setInitialChunk(analysis.initialChunk);
+        setSelectedChunk(null); // no chunk selected initially
+        setSelectedModule(null);
+        setInclusion(null);
+        setIsInitialLoad(false);
+      });
     } catch (err) {
       console.error("Failed to parse metafile:", err);
       clearData();
@@ -307,16 +315,24 @@ export default function ResultsPage() {
     loadInitialBundle();
   }, [router, loadBundleData]);
 
-  // Handle bundle switching
+  // Handle bundle switching with loading state
   const handleBundleChange = React.useCallback(
     async (bundleId: string) => {
-      const bundleData = await metafileStorage.loadMetafileById(bundleId);
-      if (bundleData) {
-        setCurrentBundleId(bundleId);
-        await loadBundleData(bundleData);
+      // Don't switch if already switching or if it's the same bundle
+      if (isSwitchingBundle || bundleId === currentBundleId) return;
+
+      setIsSwitchingBundle(true);
+      try {
+        const bundleData = await metafileStorage.loadMetafileById(bundleId);
+        if (bundleData) {
+          setCurrentBundleId(bundleId);
+          await loadBundleData(bundleData);
+        }
+      } finally {
+        setIsSwitchingBundle(false);
       }
     },
-    [loadBundleData]
+    [loadBundleData, isSwitchingBundle, currentBundleId]
   );
 
   // Handle bundle deletion
@@ -658,6 +674,7 @@ export default function ResultsPage() {
 
   async function clearData() {
     await metafileStorage.clearMetafile();
+    bundleCache.clear();
     setMetafile(null);
     setChunks([]);
     setSelectedChunk(null);
@@ -710,6 +727,7 @@ export default function ResultsPage() {
         currentBundleId={currentBundleId || undefined}
         onBundleChange={handleBundleChange}
         onBundleDeleted={handleBundleDeleted}
+        isSwitchingBundle={isSwitchingBundle}
       />
 
       <div className="mx-auto w-full space-y-2 overflow-x-hidden h-[calc(100vh-2rem-68px)]">

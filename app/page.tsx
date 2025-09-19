@@ -34,7 +34,6 @@ export default function HomePage() {
           className="w-5 h-5 rounded-full border-2 border-muted-foreground/30 border-t-primary animate-spin"
           aria-label="Loading"
         />
-        <p className="text-sm text-muted-foreground">Loading…</p>
       </div>
     </div>
   );

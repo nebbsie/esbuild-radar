@@ -11,6 +11,7 @@ interface ChunkMatchesProps {
   isLazyChunks?: boolean;
   leftMetafile?: Metafile;
   rightMetafile?: Metafile;
+  sortMode?: "increase" | "decrease";
 }
 
 export function ChunkMatches({
@@ -18,6 +19,7 @@ export function ChunkMatches({
   isLazyChunks = false,
   leftMetafile,
   rightMetafile,
+  sortMode = "increase",
 }: ChunkMatchesProps) {
   const { matchedChunks, unmatchedLeft, unmatchedRight } = comparison;
 
@@ -100,50 +102,42 @@ export function ChunkMatches({
     return baseClass;
   };
 
-  // Create a unified list of all chunks, sorted by biggest improvement
+  // Create a unified list of all chunks, sortable by increase/decrease
   const allChunks = [
-    // Matched chunks first, sorted by improvement score (best improvements first)
-    ...matchedChunks
-      .map((match, index) => {
-        const sizeChange = match.rightChunk.bytes - match.leftChunk.bytes;
-        const percentageChange =
-          match.leftChunk.bytes > 0
-            ? (sizeChange / match.leftChunk.bytes) * 100
-            : 0;
-
-        // Calculate improvement score: positive for improvements, negative for regressions
-        let improvementScore = 0;
-        if (isLazyChunks) {
-          // For lazy chunks: increases are good (positive), decreases are bad (negative)
-          improvementScore = percentageChange;
-        } else {
-          // For initial chunks: decreases are good (positive), increases are bad (negative)
-          improvementScore = -percentageChange;
-        }
-
-        return {
-          type: "matched" as const,
-          match,
-          index,
-          improvementScore,
-        };
-      })
-      .sort((a, b) => b.improvementScore - a.improvementScore),
-    // Added chunks (unmatched right)
+    ...matchedChunks.map((match, index) => {
+      const sizeChange = match.rightChunk.bytes - match.leftChunk.bytes;
+      const percentageChange =
+        match.leftChunk.bytes > 0
+          ? (sizeChange / match.leftChunk.bytes) * 100
+          : 0;
+      return {
+        type: "matched" as const,
+        match,
+        index,
+        percentageChange,
+      };
+    }),
     ...unmatchedRight.map((chunk, index) => ({
       type: "added" as const,
       chunk,
       index,
-      improvementScore: isLazyChunks ? 100 : -100, // High priority, positive for lazy, negative for initial
+      percentageChange: Number.POSITIVE_INFINITY,
     })),
-    // Removed chunks (unmatched left) at the end
     ...unmatchedLeft.map((chunk, index) => ({
       type: "removed" as const,
       chunk,
       index,
-      improvementScore: isLazyChunks ? -100 : 100, // High priority, negative for lazy, positive for initial
+      percentageChange: Number.NEGATIVE_INFINITY,
     })),
-  ];
+  ].sort((a, b) => {
+    if (sortMode === "increase") {
+      // Most increased first
+      return (b.percentageChange ?? 0) - (a.percentageChange ?? 0);
+    } else {
+      // Most decreased first
+      return (a.percentageChange ?? 0) - (b.percentageChange ?? 0);
+    }
+  });
 
   return (
     <div className="space-y-4">
@@ -164,6 +158,7 @@ export function ChunkMatches({
             return (
               <div
                 key={`matched-${item.index}`}
+                data-chunk-id={match.rightChunk.outputFile}
                 className={`p-2 border rounded-lg hover:opacity-80 transition-colors ${getRowClass(match.leftChunk.bytes, match.rightChunk.bytes, match.matchType === "weak")}`}
               >
                 <div className="flex items-center justify-between mb-2">
@@ -316,6 +311,7 @@ export function ChunkMatches({
             return (
               <div
                 key={`added-${item.index}`}
+                data-chunk-id={chunk.outputFile}
                 className="p-2 border border-green-200 bg-green-50 rounded-lg"
               >
                 <div className="flex items-center gap-2">
@@ -343,6 +339,7 @@ export function ChunkMatches({
             return (
               <div
                 key={`removed-${item.index}`}
+                data-chunk-id={chunk.outputFile}
                 className="p-2 border border-red-200 bg-red-50 rounded-lg"
               >
                 <div className="flex items-center gap-2">

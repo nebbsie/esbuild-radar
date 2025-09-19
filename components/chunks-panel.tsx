@@ -39,6 +39,7 @@ interface ChunksPanelProps {
   setSelectedModule: (module: string | null) => void;
   setSelectedChunk: (chunk: InitialChunkSummary | null) => void;
   setInclusion: (inclusion: InclusionPathResult | null) => void;
+  onChunkClick?: (chunk: InitialChunkSummary) => void;
 }
 
 export function ChunksPanel({
@@ -60,6 +61,7 @@ export function ChunksPanel({
   setSelectedModule,
   setSelectedChunk,
   setInclusion,
+  onChunkClick,
 }: ChunksPanelProps) {
   return (
     <Card className="h-full">
@@ -85,6 +87,21 @@ export function ChunksPanel({
           iconType="lazy"
           description="Code loaded on-demand when needed"
         />
+
+        {/* Total Code Size */}
+        <div className="w-full mb-3 p-3 bg-muted/40 border border-border rounded-md">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-medium">Total code size</div>
+            <div className="text-sm font-semibold">
+              {formatBytes(
+                [...initialChunks, ...lazyChunks].reduce(
+                  (sum, c) => sum + (c?.bytes || 0),
+                  0
+                )
+              )}
+            </div>
+          </div>
+        </div>
 
         <div className="flex-shrink-0 mb-3">
           <div className="flex items-center gap-2 w-full">
@@ -192,6 +209,10 @@ export function ChunksPanel({
                 <button
                   key={c.outputFile}
                   onClick={() => {
+                    if (onChunkClick) {
+                      onChunkClick(c);
+                      return;
+                    }
                     // Use the extracted function to determine what module to select
                     const { selectedModule, inclusionPath } =
                       determineModuleForChunkOpening(c, metafile, initialChunk);

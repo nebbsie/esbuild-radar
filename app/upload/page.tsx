@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { parseMetafile } from "@/lib/metafile";
 import { metafileStorage } from "@/lib/storage";
 import type { MetafileData } from "@/lib/types";
+import { Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 
@@ -20,6 +21,7 @@ export default function UploadPage() {
     null
   );
   const [loadingSaved, setLoadingSaved] = React.useState(true);
+  const [isProcessing, setIsProcessing] = React.useState(false);
 
   // Do not clear existing bundles on mount; allow multiple tabs
   React.useEffect(() => {
@@ -53,6 +55,7 @@ export default function UploadPage() {
 
   async function loadDemo() {
     try {
+      setIsProcessing(true);
       const response = await fetch("/demo-stats.json");
       const json = await response.json();
 
@@ -71,11 +74,13 @@ export default function UploadPage() {
         "Failed to load demo metafile: " +
           (err instanceof Error ? err.message : "Unknown error")
       );
+      setIsProcessing(false);
     }
   }
 
   async function processFile(file: File) {
     try {
+      setIsProcessing(true);
       const text = await file.text();
       const json = JSON.parse(text);
       // Validate that it's a proper esbuild metafile
@@ -91,6 +96,7 @@ export default function UploadPage() {
         "Failed to process metafile: " +
           (err instanceof Error ? err.message : "Unknown error")
       );
+      setIsProcessing(false);
     }
   }
 
@@ -102,17 +108,20 @@ export default function UploadPage() {
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
     setIsDragOver(false);
+    if (isProcessing) return;
     const file = e.dataTransfer.files?.[0];
     if (file) processFile(file);
   }
 
   function onDragOver(e: React.DragEvent) {
     e.preventDefault();
+    if (isProcessing) return;
     setIsDragOver(true);
   }
 
   function onDragLeave(e: React.DragEvent) {
     e.preventDefault();
+    if (isProcessing) return;
     setIsDragOver(false);
   }
 
@@ -129,9 +138,41 @@ export default function UploadPage() {
     }
   }
 
+  async function deleteBundle(bundleId: string) {
+    if (!confirm("Are you sure you want to delete this bundle?")) {
+      return;
+    }
+
+    try {
+      await metafileStorage.deleteBundle(bundleId);
+
+      // Update the local state
+      setSavedBundles((prev) => prev.filter((b) => b.id !== bundleId));
+
+      // If this was the current bundle, clear it
+      if (currentBundleId === bundleId) {
+        setCurrentBundleId(null);
+      }
+    } catch (err) {
+      console.error("Failed to delete bundle:", err);
+      alert(
+        "Failed to delete bundle: " +
+          (err instanceof Error ? err.message : "Unknown error")
+      );
+    }
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center p-2 sm:p-4">
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-md relative">
+        {isProcessing && (
+          <div className="absolute inset-0 z-10 bg-background/70 backdrop-blur-[1px] flex items-center justify-center">
+            <div
+              className="w-6 h-6 rounded-full border-2 border-muted-foreground/30 border-t-primary animate-spin"
+              aria-label="Uploading"
+            />
+          </div>
+        )}
         <CardHeader>
           <CardTitle className="text-center">Upload esbuild metafile</CardTitle>
           <p className="text-sm text-muted-foreground text-center">
@@ -153,6 +194,7 @@ export default function UploadPage() {
                     size="sm"
                     variant="secondary"
                     onClick={() => openBundle(currentBundleId)}
+                    disabled={isProcessing}
                   >
                     Reopen last opened
                   </Button>
@@ -163,7 +205,7 @@ export default function UploadPage() {
                   {savedBundles.map((b, idx) => (
                     <div key={b.id} className="py-2">
                       <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="truncate text-sm font-medium">
                             {b.name || "stats.json"}
                           </div>
@@ -171,9 +213,24 @@ export default function UploadPage() {
                             {new Date(b.createdAt).toLocaleString()}
                           </div>
                         </div>
-                        <Button size="sm" onClick={() => openBundle(b.id)}>
-                          Open
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            onClick={() => openBundle(b.id)}
+                            disabled={isProcessing}
+                          >
+                            Open
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => deleteBundle(b.id)}
+                            className="p-1 h-8 w-8"
+                            disabled={isProcessing}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
                       </div>
                       {idx < savedBundles.length - 1 && (
                         <Separator className="my-2" />
@@ -196,6 +253,7 @@ export default function UploadPage() {
               value={metafileName}
               onChange={(e) => setMetafileName(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-border rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+              disabled={isProcessing}
             />
           </div>
           <div
@@ -203,7 +261,7 @@ export default function UploadPage() {
               isDragOver
                 ? "border-primary bg-primary/10"
                 : "border-muted-foreground/25"
-            }`}
+            } ${isProcessing ? "opacity-60 pointer-events-none" : ""}`}
             onDrop={onDrop}
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
@@ -213,8 +271,14 @@ export default function UploadPage() {
                 Drag and drop your stats.json file here, or click to select.
               </div>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <Button onClick={onChooseFile}>Select File</Button>
-                <Button variant="outline" onClick={loadDemo}>
+                <Button onClick={onChooseFile} disabled={isProcessing}>
+                  Select File
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={loadDemo}
+                  disabled={isProcessing}
+                >
                   Try Demo
                 </Button>
               </div>
@@ -225,6 +289,7 @@ export default function UploadPage() {
               accept="application/json,.json"
               className="hidden"
               onChange={onFileChange}
+              disabled={isProcessing}
             />
           </div>
           <div className="mt-6 text-center text-xs text-muted-foreground">
